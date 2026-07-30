@@ -8,6 +8,8 @@ entwickelt und getestet gegen **Cubase Pro 14** auf macOS über den IAC-Treiber.
 Browser (Web MIDI)  ──IAC-Treiber Bus 1──▶  Cubase  ──▶  HALion Sonic / Groove Agent
 ```
 
+![MIDI PERFECT 2 — Oberfläche](screenshot.png)
+
 Fünf unabhängige Lanes (DRUMS, BASS, CHORDS, ARP, MELODY) erzeugen aus einer
 Akkordfolge deterministisch Patterns, senden sie auf getrennten MIDI-Kanälen und
 lassen sich live umschalten, würfeln und mutieren. Zusätzlich: MIDI Clock und MMC
@@ -23,6 +25,7 @@ für Transport-Sync, sowie SMF-Export (Type 1, eine Spur pro Lane).
 | `CUBASE-SETUP.md` | Cubase-Einrichtung + die Fallstricke beim MIDI-Routing |
 | `ARCHITEKTUR.md` | Aufbau des Codes, Datenmodell, Erweiterungspunkte |
 | `CHANGELOG.md` | Build-Historie mit Begründung der Änderungen |
+| `screenshot.png` | Die Oberfläche bei 2560 px |
 
 ---
 
