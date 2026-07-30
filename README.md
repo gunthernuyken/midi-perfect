@@ -118,7 +118,9 @@ Der Lane-Zustand (an/aus, Kanal, Style, Sound, Oktave, Velocity, Density, Lock)
 wird in `localStorage` gespeichert und beim nächsten Öffnen wiederhergestellt.
 Der Button *Lane-Zustand zurücksetzen* verwirft ihn und lädt die Werkseinstellung.
 Dasselbe gilt für die eingeklappten Panels und für das komplette
-*DAW Sync*-Panel inklusive Slave-Modus und Portwahl.
+*DAW Sync*-Panel inklusive Slave-Modus und Portwahl. Beim allerersten Start
+schaltet die Seite **SLAVE selbst ein und wählt den ersten IAC-Eingang** —
+danach gilt, was du zuletzt eingestellt hast.
 
 ### Determinismus
 

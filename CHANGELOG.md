@@ -7,6 +7,22 @@ gar nicht geladen".
 
 ---
 
+## BUILD 2026-07-30-J — SLAVE + IAC als Werkseinstellung
+
+Beim ersten Start ohne gespeicherten Zustand schaltet die Seite **SLAVE
+selbstständig ein** und wählt den ersten IAC-Eingang (bevorzugt Bus 1). Das ist
+der Normalbetrieb mit einer DAW und soll keine zwei Klicks kosten.
+
+Findet sich kein IAC-Port, bleibt SLAVE aus und es steht eine Meldung im Log.
+
+Ein manuelles Ausschalten hat weiterhin Vorrang: sobald einmal etwas gespeichert
+ist, gilt der gespeicherte Zustand und die Werkseinstellung greift nicht mehr.
+Der `localStorage`-Schlüssel wurde deshalb auf `midiperfect2.sync.v2` gehoben —
+sonst hätte ein aus Build I stammender Eintrag mit `slave:false` die neue
+Voreinstellung dauerhaft blockiert.
+
+---
+
 ## BUILD 2026-07-30-I — DAW-Sync-Einstellungen bleiben erhalten
 
 Das ganze *DAW Sync*-Panel überlebt jetzt den Reload: Clock-Ausgang, SLAVE,

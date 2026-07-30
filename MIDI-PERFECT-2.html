@@ -149,7 +149,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
 <h1>&#127929; MIDI PERFECT 2</h1>
 <p class="sub">Multi-Lane Generator &middot; Drums + 137 Styles &middot; Band-Presets &middot; Infinity Mutation &middot; SMF Export &middot; MIDI Clock &amp; MMC &rarr; Cubase</p>
-<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-I &middot; DAW-Sync-Einstellungen bleiben erhalten</span></p>
+<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-J &middot; SLAVE + IAC als Werkseinstellung</span></p>
 
 <div class="grid">
 
@@ -2024,7 +2024,7 @@ function extSpp(sixteenths){
    neu, der Name bleibt. Ist der Port beim nächsten Start nicht da, bleibt SLAVE
    aus und es steht eine Meldung im Log – lieber ehrlich stumm als heimlich am
    falschen Port hängen. */
-var LS_SYNC='midiperfect2.sync.v1';
+var LS_SYNC='midiperfect2.sync.v2';
 function optName(sel){
   if(!sel||!sel.value)return '';
   var o=sel.options[sel.selectedIndex];
@@ -2057,16 +2057,41 @@ function selByName(sel,name){
     if(sel.options[i].value&&sel.options[i].textContent===name){ sel.selectedIndex=i; return true; }
   return false;
 }
+/* Werkseinstellung: SLAVE an, Clock-Eingang der erste IAC-Bus. Das ist der
+   Normalbetrieb mit einer DAW; wer es anders will, schaltet es einmal um und
+   der gespeicherte Zustand hat ab dann Vorrang. */
+function defaultClockInput(){
+  var sel=gEl('clkIn'); if(!sel)return -1;
+  var best=-1, rank=99;
+  for(var i=0;i<sel.options.length;i++){
+    var o=sel.options[i]; if(!o.value)continue;
+    var n=o.textContent.toLowerCase(), r=99;
+    if(n.indexOf('iac')>=0&&n.indexOf('1')>=0)r=0;
+    else if(n.indexOf('iac')>=0)r=1;
+    if(r<rank){rank=r;best=i;}
+  }
+  return rank<99?best:-1;
+}
+function enableSlave(idx,why){
+  var sel=gEl('clkIn'); sel.selectedIndex=idx;
+  ext.on=true;
+  var sb=gEl('slaveTgl'); sb.classList.add('on'); sb.innerHTML='&#10003; SLAVE AN';
+  extAttach();
+  log(why+': SLAVE &larr; '+sel.options[idx].textContent,'ok');
+}
 function restoreSyncPorts(){
-  var st=readSync(); if(!st)return;
+  var st=readSync();
+  if(!st){                                   // erster Start ohne gespeicherten Zustand
+    var di=defaultClockInput();
+    if(di>=0){ enableSlave(di,'Voreinstellung'); saveSync(); }
+    else log('Voreinstellung SLAVE nicht m&ouml;glich &ndash; kein IAC-Eingang gefunden.','w');
+    syncInfo(); extStatus(); return;
+  }
   selByName(gEl('syncPort'),st.syncPortName);
   var okIn=selByName(gEl('clkIn'),st.clkInName);
   if(st.slave){
     if(okIn&&!ext.on){
-      ext.on=true;
-      var sb=gEl('slaveTgl'); sb.classList.add('on'); sb.innerHTML='&#10003; SLAVE AN';
-      extAttach();
-      log('DAW-Sync wiederhergestellt: SLAVE &larr; '+st.clkInName,'ok');
+      enableSlave(gEl('clkIn').selectedIndex,'DAW-Sync wiederhergestellt');
     }else if(!okIn){
       log('Gespeicherter Clock-Eingang &bdquo;'+st.clkInName+'&ldquo; ist nicht verf&uuml;gbar &ndash; SLAVE bleibt aus.','w');
     }
