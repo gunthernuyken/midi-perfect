@@ -149,7 +149,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
 <h1>&#127929; MIDI PERFECT 2</h1>
 <p class="sub">Multi-Lane Generator &middot; Drums + 137 Styles &middot; Band-Presets &middot; Infinity Mutation &middot; SMF Export &middot; MIDI Clock &amp; MMC &rarr; Cubase</p>
-<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-F &middot; MIDI-Clock-Slave (DAW gibt den Takt vor)</span></p>
+<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-G &middot; Clock-Slave: Zeitbasis-Fix</span></p>
 
 <div class="grid">
 
@@ -1957,7 +1957,13 @@ function extAttach(){
 }
 function extMessage(e){
   if(!ext.on)return;
-  var d=e.data, st=d[0], now=(typeof e.timeStamp==='number'&&e.timeStamp>0)?e.timeStamp:performance.now();
+  /* Bewusst performance.now() statt e.timeStamp: dessen Epoche ist je nach
+     Chrome-Version nicht dieselbe wie die des Schedulers. Mischt man beide,
+     driftet der Lookahead-Horizont um Größenordnungen ab – die Clock zählt
+     dann sauber weiter, aber es geht keine einzige Note raus. Die Latenz des
+     Handler-Aufrufs liegt unter einer Millisekunde und ist irrelevant, weil
+     das Tempo ohnehin über 48 Clocks gemittelt wird. */
+  var d=e.data, st=d[0], now=performance.now();
   if(st===0xF8)      extClock(now);
   else if(st===0xFA) extStart(0,now);
   else if(st===0xFB) extStart(-1,now);
@@ -1980,9 +1986,8 @@ function extClock(now){
   if(!ext.running||!sched.on)return;
   sched.tickRef+=CLKDIV;                      // Position kommt NUR aus der Clock
   sched.msRef=now;
-  if(sched.loopTicks>0&&sched.tickRef>=sched.loopTicks&&sched.idx>=sched.ev.length){
-    sched.tickRef-=sched.loopTicks; sched.loop++; loadLoopEvents();
-  }
+  // Loop-Wechsel bleibt allein Sache von schedTick – sonst zieht ihn jeder von
+  // beiden einmal ab und der Zeiger springt einen ganzen Durchlauf zu weit zurück.
 }
 function extStart(pos,now){
   ext.running=true; ext.last=0; ext.ivl=[];
@@ -2250,7 +2255,12 @@ function schedTick(){
   var slave=extSlaving();
   // Im Slave-Modus gehört sched.tickRef der Clock-Routine; hier wird zwischen zwei
   // Clocks nur interpoliert, damit der Lookahead weiterhin greift.
-  var curTick=sched.tickRef+(now-sched.msRef)/mpt;
+  var dt=now-sched.msRef;
+  if(dt<0||dt>4000){                        // Zeitbasis auseinandergelaufen -> resynchronisieren
+    sched.msRef=now; dt=0;
+    if(slave)log('Zeitbasis resynchronisiert (Clock-Slave)','w');
+  }
+  var curTick=sched.tickRef+dt/mpt;
   if(!slave){ sched.tickRef=curTick; sched.msRef=now; }
   var horizon=curTick+LOOKAHEAD/mpt;
   pumpClock(curTick,now,mpt);              // MIDI Clock für Cubase im selben Zeitraster

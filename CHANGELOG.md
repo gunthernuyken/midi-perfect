@@ -7,6 +7,49 @@ gar nicht geladen".
 
 ---
 
+## BUILD 2026-07-30-G — Clock-Slave: Zeitbasis-Fix
+
+**Problem:** Im Slave-Modus lief die Synchronisation sichtbar korrekt — Clocks
+wurden gezählt, das Tempo erkannt, der BPM-Regler folgte Cubase — aber es kam
+**keine einzige Note** in der DAW an. Nur während einer Tempoänderung war kurz
+etwas zu hören.
+
+**Ursache:** Zwei verschiedene Zeit-Epochen im selben Rechenweg.
+`extMessage` übernahm `e.timeStamp` des eingehenden MIDI-Events als
+`sched.msRef`, `schedTick` rechnete danach mit `performance.now()`. Wenn Chrome
+für MIDI-Events eine andere Epoche liefert als für `performance.now()`, wird
+
+```js
+curTick = sched.tickRef + (now - sched.msRef) / mpt
+```
+
+um Größenordnungen falsch. Der Lookahead-Horizont landet weit in der
+Vergangenheit, die Bedingung `ev[idx].t < horizon` trifft nie zu — und weil
+`tickRef` weiterhin sauber aus den Clock-Ticks kommt, sehen Taktzähler,
+BPM-Anzeige und Clock-Zähler völlig gesund aus. Die Anzeige lügt nicht, sie misst
+nur etwas anderes als der Scheduler.
+
+Das kurze Aufflackern bei Tempoänderungen kam von `extSpp`, das `msRef` auf
+`performance.now()` zurücksetzte — bis der nächste F8-Tick es wieder verstellte.
+
+**Geändert**
+
+- `extMessage` nimmt ausschließlich `performance.now()`. Die Handler-Latenz liegt
+  unter einer Millisekunde und ist irrelevant, weil das Tempo über 48 Clocks
+  gemittelt wird.
+- **Notbremse in `schedTick`:** liegt `now - msRef` außerhalb von 0…4000 ms,
+  wird die Zeitbasis resynchronisiert statt weitergerechnet, mit Log-Eintrag.
+- **Doppelter Loop-Wechsel entfernt.** `extClock` und `schedTick` hätten beide
+  `loopTicks` abgezogen — der Zeiger wäre einen kompletten Durchlauf zu weit
+  zurückgesprungen. Der Loop-Wechsel liegt jetzt allein bei `schedTick`.
+
+**Regressionstest** mit absichtlich verschobener Event-Epoche (+1,78·10¹²):
+vorher 0 Noten, nachher durchgehende Wiedergabe über mehrere Loop-Grenzen
+(48 → 98 → 150 Noten), Loop-Zähler und Taktanzeige laufen mit, null Rückläufer
+auf den Bus.
+
+---
+
 ## BUILD 2026-07-30-F — MIDI-Clock-Slave
 
 **Problem:** Tempo-Sync mit Cubase funktionierte in keiner Konfiguration.

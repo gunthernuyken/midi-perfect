@@ -165,6 +165,14 @@ Der Loop-Wechsel muss beide Fälle kennen: im Slave-Modus wird `tickRef`
 dekrementiert (`-= loopTicks`), statt aus `curTick` neu gesetzt zu werden —
 sonst würde die Wanduhr die clock-getriebene Zeitbasis überschreiben.
 
+**Eine Zeitbasis, nicht zwei.** Der MIDI-Eingangs-Handler stempelt bewusst mit
+`performance.now()` und nicht mit `e.timeStamp` des Events. Chrome liefert für
+MIDI-Events nicht zwingend dieselbe Epoche wie für `performance.now()`; mischt
+man beide, wird `curTick` um Größenordnungen falsch und es geht keine Note mehr
+raus — während Taktzähler und BPM-Anzeige weiterhin gesund aussehen, weil die
+Position aus den Clock-Ticks kommt. `schedTick` hat zusätzlich eine Notbremse:
+liegt `now - msRef` außerhalb von 0…4000 ms, wird resynchronisiert.
+
 ### Rückkopplungsschutz
 
 Generator und DAW hängen typischerweise am selben IAC-Bus. Solange
