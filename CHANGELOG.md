@@ -7,6 +7,55 @@ gar nicht geladen".
 
 ---
 
+## BUILD 2026-07-30-F — MIDI-Clock-Slave
+
+**Problem:** Tempo-Sync mit Cubase funktionierte in keiner Konfiguration.
+
+**Ursache:** Cubase kann sich nicht auf eingehende MIDI Clock synchronisieren.
+Als Timecode-Quelle akzeptiert es nur Interner Timecode, MIDI-Timecode,
+ASIO-Positioning und VST System Link. Der „Tempo-Handshake" konnte prinzipiell
+nie wirken. Der Hilfetext im Panel („Timecode-Quelle MIDI Timecode/MIDI Clock")
+war schlicht falsch.
+
+**Geändert — Rollen umgedreht.** Die DAW hält die Zeit, der Generator folgt:
+
+- **Clock-Slave-Modus** (Abschnitt 7c). Wertet F8 (Clock), FA (Start),
+  FB (Continue), FC (Stop) und F2 (Songposition) eines wählbaren MIDI-Eingangs
+  aus. Cubases Transport startet und stoppt damit den Generator, Tempoänderungen
+  greifen im laufenden Takt, der BPM-Regler folgt sichtbar.
+- **Zwei Zeitquellen.** Im Slave-Modus schreibt `schedTick` `tickRef`/`msRef`
+  nicht mehr fort, sondern interpoliert nur für den Lookahead-Horizont; die
+  Position kommt ausschließlich aus den Clock-Ticks. Die gesamte
+  Nachfolgelogik bleibt unverändert — rund 80 Zeilen statt Sequencer-Umbau.
+- **Rückkopplungsschutz.** Solange Slave aktiv ist, geben `clockStart`,
+  `clockStop`, `pumpClock`, `cubaseStart` und `cubaseStopCmd` sofort zurück.
+  Generator und DAW hängen am selben IAC-Bus; sonst sendet der Generator die
+  Clock, der er folgt, selbst wieder aus.
+- Tempoerkennung über das gleitende Mittel der letzten 48 Clock-Abstände,
+  mit Ausreißerfilter (nur 1,5–400 ms) und Abriss-Erkennung nach 900 ms.
+- MIDI-Eingänge werden jetzt mit enumeriert (`populateInputs`).
+
+**Verifiziert** mit simuliertem Clock-Master: externer Start erkannt,
+Tempowechsel 120→160 nachgezogen, externer Stop greift, null Clock-Bytes und
+null SysEx gehen zurück nach draußen.
+
+---
+
+## BUILD 2026-07-30-E — Sync-Panel korrigiert
+
+- Panel heißt jetzt **DAW Sync** statt Cubase Sync.
+- Der falsche Setup-Hinweis ist ersetzt durch eine Warnung, dass Cubase MIDI
+  Clock nicht als Sync-Quelle annimmt.
+- „Tempo-Handshake" → **Clock-Burst**, gekennzeichnet als Hardware-Feature
+  (Drumcomputer, Groovebox, Looper).
+- Der MMC-Setup-Pfad ist auf die tatsächliche Dialogstruktur korrigiert:
+  Transport → Projekt-Synchronisationseinstellungen → **Gerätesteuerung** →
+  MMC-Slave aktiv. Dass dieser Haken standardmäßig **aus** ist, war der Grund,
+  warum Play/Record/Stop nichts bewirkten — der Generator hatte immer korrekt
+  gesendet (`F0 7F 7F 06 02 F7` usw., headless verifiziert).
+
+---
+
 ## BUILD 2026-07-30-D — Kommandoleiste, volle Breite, Klapp-Panels
 
 **Problem:** Play/Stop lagen im zweiten Panel und scrollten weg. Nach jeder

@@ -118,38 +118,88 @@ aussieht: den Ordner prüfen.
 
 ## 7 · Transport-Sync
 
-Zwei unabhängige Mechanismen, beide im Panel *Cubase Sync*:
+Hier lauert der größte Irrtum, deshalb zuerst die Tatsache:
 
-### MIDI Clock (Tempo und Position)
+> **Cubase kann sich nicht auf eingehende MIDI Clock synchronisieren.**
+> Unter *Projekt-Synchronisationseinstellungen → Quellen* stehen als Timecode-Quelle
+> ausschließlich **Interner Timecode**, **MIDI-Timecode**, **ASIO-Audio-Gerät** und
+> **VST System Link**. MIDI Clock taucht dort nicht auf und hat es seit Cubase SX
+> nie getan — mit der Umstellung auf die lineare Zeit-Engine hat Steinberg die
+> Clock-Slave-Fähigkeit entfernt. Cubase ist MIDI-Clock-*Master*, nie Slave.
 
-Der Generator sendet 24 Clocks pro Viertel plus Start/Continue/Stop.
-Cubase übernimmt damit Tempo und Position:
+Daraus folgen zwei brauchbare Wege und ein Irrweg.
 
-```
-Transport → Projekt-Synchronisationseinstellungen
-  Timecode-Quelle: MIDI Timecode / MIDI Clock
-  Eingang: derselbe Port (IAC Bus 1)
-  Sync in der Transportleiste aktivieren
-```
+### 7a · Clock-Slave — Cubase gibt den Takt vor (empfohlen)
 
-### MMC (Transportbefehle)
-
-Play, Record und Stop per SysEx. **Setzt voraus, dass der Browser SysEx
-freigegeben hat** — die Statuszeile im Generator zeigt das an
-(*„MIDI-Zugriff erteilt (inkl. SysEx/MMC)"*).
+Die Richtung, die funktioniert. Cubase sendet Clock, der Generator folgt.
 
 ```
-Projekt-Synchronisation → MMC Slave aktiv
-MMC-Eingang: IAC
-Device-ID identisch (Default 127 = alle)
+Cubase  ──MIDI Clock (F8/FA/FB/FC/F2)──▶  IAC-Treiber Bus 1  ──▶  MIDI PERFECT
+MIDI PERFECT  ──Noten──▶  IAC-Treiber Bus 1  ──▶  Cubase
 ```
 
-### Count-In
+Ein IAC-Bus trägt beide Richtungen gleichzeitig. Ein zweiter Bus ist sauberer,
+aber nicht erforderlich.
 
-Lässt Cubase vorlaufen, bevor die erste Note kommt — sinnvoll beim
-Aufnehmen, damit der Record-Start nicht die erste Zählzeit abschneidet.
+**In Cubase:**
 
----
+```
+Transport → Projekt-Synchronisationseinstellungen → Ziele
+  MIDI-Clock-Ziele            ☑ IAC-Treiber Bus 1
+  MIDI-Clock-Voreinstellungen ☑ MIDI-Clock folgt Projektposition
+                              ☑ Immer Start-Befehl senden
+                              ☑ MIDI-Clock-Befehle im Stop-Modus senden
+```
+
+Das letzte Häkchen ist bequem: Cubase sendet Clock auch im Stop-Zustand, der
+Generator kennt das Tempo also schon vor dem ersten Play.
+
+**Im Generator**, Panel *DAW Sync*: **SLAVE** einschalten, Clock-Eingang auf
+denselben IAC-Bus stellen. Die Statuszeile muss dann lauten:
+
+```
+SLAVE ← IAC-Treiber Bus 1 · wartet auf Start · 111.0 BPM erkannt · 240 Clocks
+```
+
+Ab jetzt starten und stoppen Cubases Transport den Generator, Tempoänderungen
+greifen im laufenden Takt, und der BPM-Regler folgt sichtbar mit.
+
+Solange SLAVE aktiv ist, unterdrückt der Generator seinen eigenen Clock-Ausgang
+und alle MMC-Sendungen — sonst entstünde auf demselben Bus eine Rückkopplung.
+
+### 7b · MMC — Generator steuert Cubases Transport
+
+Funktioniert, muss aber in Cubase erst aktiviert werden. Standardmäßig ist es aus.
+
+```
+Transport → Projekt-Synchronisationseinstellungen → Gerätesteuerung
+  Machine-Control-Eingang
+    ☑ MMC-Slave aktiv
+       MIDI-Eingang        IAC-Treiber Bus 1
+       MMC-Gerätekennung   127        ← muss zum Feld "MMC Device" im Generator passen
+```
+
+Der Generator sendet dann:
+
+| Aktion | SysEx |
+|---|---|
+| Cubase Play | `F0 7F 7F 06 02 F7` |
+| Cubase Record | `F0 7F 7F 06 06 F7` → `F0 7F 7F 06 03 F7` (Record Strobe + Deferred Play) |
+| Cubase Stop | `F0 7F 7F 06 01 F7` |
+
+MMC braucht die **SysEx-Freigabe des Browsers**. Die Statuszeile im Generator
+muss *„MIDI-Zugriff erteilt (inkl. SysEx/MMC)"* zeigen. Steht dort *„ohne SysEx"*,
+Seite neu laden und bei der Abfrage SysEx mit erlauben.
+
+**Count-In** lässt Cubase vorlaufen, bevor die erste Note kommt — beim Aufnehmen
+schneidet der Record-Start sonst die erste Zählzeit an.
+
+### 7c · Der Irrweg: Clock-Ausgang Richtung Cubase
+
+Der Schalter **CLOCK** und der **Clock-Burst** senden MIDI Clock plus Start/Stop
+nach draußen. Für Hardware — Drumcomputer, Groovebox, Looper — ist das genau
+richtig. Cubase ignoriert es vollständig. Wer hier sucht, sucht in die falsche
+Richtung; siehe 7a.
 
 ## 8 · Checkliste bei Stille
 
@@ -166,9 +216,18 @@ Der Reihe nach, von der Quelle zum Ziel:
 7. Die gesendeten Drum-Noten sind GM-Standard:
    36 Kick · 38 Snare · 42 HiHat closed · 46 HiHat open · 49 Crash · 51 Ride.
 
+Im Clock-Slave-Modus zusätzlich:
+
+8. Zeigt die Slave-Statuszeile Clocks und ein BPM? Nein → Cubase sendet keine
+   Clock (Ziele-Tab prüfen) oder der falsche Eingang ist gewählt.
+9. Steht dort *Clock abgerissen*, hat Cubase mittendrin aufgehört zu senden —
+   meist weil *MIDI-Clock-Befehle im Stop-Modus senden* aus ist. Das ist
+   unkritisch, der Generator läuft beim nächsten Start wieder mit.
+
 ---
 
 ## 9 · Projekt speichern
 
-Das gesamte Spur-Routing steckt in der `.cpr`. Nach dem Einrichten
-speichern — sonst ist beim nächsten Öffnen alles wieder auf *Alle Eingänge*.
+Spur-Routing, MMC-Slave und die MIDI-Clock-Ziele stecken **alle in der `.cpr`**.
+Nach dem Einrichten speichern — sonst ist beim nächsten Öffnen alles wieder auf
+*Alle Eingänge*, MMC aus und kein Clock-Ziel gesetzt.

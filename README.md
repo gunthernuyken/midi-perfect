@@ -86,7 +86,7 @@ kann man beide dauerhaft zuklappen.
 |---|---|
 | MIDI Connection | Port, Kanal-Routing, GM-Sounds, Kanalsperre, MIDI-Monitor |
 | Transport & Makros | Play/Stop, BPM, Swing, Humanize, Energy, Complexity, Loop, Mutation |
-| Cubase Sync | MIDI Clock, MMC Play/Record/Stop, Count-In, Tempo-Handshake |
+| DAW Sync | MMC Play/Record/Stop, Count-In, Clock-Ausgang, **Clock-Slave** |
 | Progression | Akkordfolge als Text oder Blöcke, Takt-Locks gegen Mutation |
 | Harmonie-Engine | Quintenzirkel, Stufen, Vorschläge, Reharmonisierung, Generator |
 | Lanes | Pro Lane: Style, Kanal, Sound, Oktave, Velocity, Density |
@@ -150,6 +150,32 @@ Bereits eingereihte Note-Offs behalten ihre Zeit, es bleibt also nichts hängen.
 MIDI Clock läuft im selben Tick-Raster (24 Clocks pro Viertel) aus derselben
 Zeitrechnung — dadurch driftet Cubase nicht gegen den Generator.
 
+### Transport-Sync mit der DAW
+
+Zwei Richtungen, und nur eine davon funktioniert mit Cubase in beide Richtungen:
+
+**MMC (Generator steuert Cubase).** Play, Record und Stop gehen als SysEx raus.
+Cubase muss dafür MMC-Slave aktiv haben. Braucht die SysEx-Freigabe des Browsers.
+
+**Clock-Slave (Cubase steuert den Generator) — die empfohlene Richtung.**
+Cubase sendet MIDI Clock, der Generator hängt sich dran: Start, Stop, Position und
+Tempo kommen aus der DAW, der BPM-Regler folgt sichtbar mit. Das ist auch
+architektonisch richtig — die DAW hält die Zeit.
+
+```
+Cubase  ──MIDI Clock (F8/FA/FB/FC/F2)──▶  IAC Bus  ──▶  MIDI PERFECT
+MIDI PERFECT  ──Noten──▶  IAC Bus  ──▶  Cubase
+```
+
+Ein IAC-Bus trägt beide Richtungen gleichzeitig; ein zweiter Bus ist sauberer,
+aber nicht nötig. Solange Slave aktiv ist, werden Clock-Ausgang und MMC-Rück-
+sendungen unterdrückt — es kann keine Rückkopplungsschleife entstehen.
+
+**Clock-Ausgang (Generator als Master).** Sendet MIDI Clock plus Start/Stop.
+Für Hardware gedacht — Drumcomputer, Groovebox, Looper.
+**Cubase kann sich nicht auf eingehende MIDI Clock synchronisieren** (siehe
+Bekannte Grenzen). Setup und Hintergrund: [CUBASE-SETUP.md](CUBASE-SETUP.md).
+
 ### Kanalsperre und MIDI-Monitor
 
 Zwei Diagnosewerkzeuge im MIDI-Connection-Panel:
@@ -184,7 +210,12 @@ Steht dort *aus*, behält das Instrument in der DAW seinen eigenen Klang.
 ## Bekannte Grenzen
 
 - **Nur Chrome/Edge.** Web MIDI ist in Safari und Firefox nicht implementiert.
-- **Kein MIDI-Input.** Die Seite sendet ausschließlich; sie hört nicht zu.
+- **Cubase kann nicht auf MIDI Clock slaven.** Als Sync-Quelle akzeptiert Cubase
+  nur MIDI Timecode, ASIO Positioning oder VST System Link — MIDI Clock ist bei
+  Steinberg seit der Umstellung auf die lineare Zeit-Engine reine Ausgabe.
+  Deshalb gibt es den Clock-Slave-Modus: Cubase ist Master, der Generator folgt.
+- **MIDI-Input nur für Clock.** Die Seite wertet ausschließlich die Realtime-Bytes
+  F8/FA/FB/FC und den Songposition-Pointer F2 aus. Noten-Input gibt es nicht.
 - **Fünf feste Lanes.** Die Lane-Liste ist ein Array im Code, keine UI zum
   Hinzufügen. Erweitern ist trivial (siehe ARCHITEKTUR.md), aber nicht anklickbar.
 - **Kein Undo für Lane-Einstellungen.** Nur die Progression hat eine Undo-Historie.

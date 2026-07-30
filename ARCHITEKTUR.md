@@ -29,7 +29,8 @@ Der Code ist in nummerierte Blöcke unterteilt, jeder mit Kommentarbanner:
 | 5 | Mutation / Lock / Reroll | Seed-Verwaltung, Takt-Locks |
 | 6 | Web MIDI | Port-Enumeration, `requestMIDIAccess`, Statusanzeige |
 | 7 | Transport | Lookahead-Scheduler, `sendAt`, Kanalsperre, MIDI-Monitor |
-| 7b | Cubase Sync | MIDI Clock, MMC, Count-In |
+| 7b | Cubase Sync | MIDI Clock (Ausgang), MMC, Count-In |
+| 7c | MIDI-Clock-Slave | Clock-Eingang, Tempoerkennung, externe Transportsteuerung |
 | 8 | SMF Export | Standard MIDI File Type 1 |
 | 9 | UI-Aufbau | `buildLanes`, `buildChMon`, `buildPiano`, `buildPresets`, `buildBands` |
 | 10 | Events | Alle Handler, Shortcuts, Kommandoleiste, Klapp-Panels |
@@ -76,6 +77,16 @@ ev = { t, d, m, v }   // Tick, Dauer in Ticks, MIDI-Note, Velocity
 ausgeschaltete Lanes generiert — das kostet etwas Rechenzeit, macht aber das
 Ein- und Ausschalten einer Lane im laufenden Loop verzögerungsfrei, weil nichts
 neu gebaut werden muss.
+
+### Clock-Slave-Zustand
+
+```js
+ext = { on, input, running, last, ivl[], mpt, bpm, ticks }
+```
+
+`ivl` sammelt die letzten 48 Clock-Abstände (= zwei Viertel), daraus ergeben sich
+`mpt` (Millisekunden pro Tick) und `bpm`. Kurz genug für echte Tempoänderungen im
+laufenden Takt, lang genug gegen Jitter.
 
 ### Scheduler-Zustand
 
@@ -127,6 +138,40 @@ alle 20 ms:
 Der Lookahead von 220 ms ist der Kompromiss: groß genug, dass der Eventloop das
 Timing nicht verhagelt, klein genug, dass STOP als sofort empfunden wird.
 
+### Zwei Zeitquellen
+
+`sched.tickRef` ist die Position, `sched.msRef` der Zeitstempel dazu. Wer die
+beiden fortschreibt, hängt vom Modus ab:
+
+| | Position kommt aus | `mpt` kommt aus |
+|---|---|---|
+| **Intern** (Default) | Wanduhr: `tickRef += (now-msRef)/mpt` in `schedTick` | BPM-Regler |
+| **Clock-Slave** | eingehenden F8-Ticks: `tickRef += CLKDIV` in `extClock` | gemessenem Clock-Abstand |
+
+Im Slave-Modus **schreibt `schedTick` die beiden Felder nicht mehr**, sondern
+interpoliert nur für den Horizont:
+
+```js
+var curTick = sched.tickRef + (now - sched.msRef) / mpt;
+if (!slave) { sched.tickRef = curTick; sched.msRef = now; }
+```
+
+Dadurch bleibt die gesamte Nachfolgelogik — Lookahead, Note-Offs, Loop-Wechsel,
+Taktanzeige — unverändert. Nur die Frage „wo sind wir gerade" wird woanders
+beantwortet. Das ist der Grund, warum der Slave-Modus mit rund 80 Zeilen
+auskommt statt mit einem Umbau des Sequencers.
+
+Der Loop-Wechsel muss beide Fälle kennen: im Slave-Modus wird `tickRef`
+dekrementiert (`-= loopTicks`), statt aus `curTick` neu gesetzt zu werden —
+sonst würde die Wanduhr die clock-getriebene Zeitbasis überschreiben.
+
+### Rückkopplungsschutz
+
+Generator und DAW hängen typischerweise am selben IAC-Bus. Solange
+`extSlaving()` wahr ist, geben `clockStart`, `clockStop`, `pumpClock`,
+`cubaseStart` und `cubaseStopCmd` sofort zurück. Sonst würde der Generator die
+Clock, der er folgt, selbst wieder aussenden.
+
 ---
 
 ## UI-Zustand
@@ -137,6 +182,9 @@ Drei getrennte `localStorage`-Schlüssel:
 |---|---|
 | `midiperfect2.lanes.v1` | Lane-Zustand (on, ch, prog, style, oct, vel, dens, lock, fill) |
 | `midiperfect2.panels.v1` | Welche Panels eingeklappt sind |
+
+(Der Slave-Modus wird bewusst **nicht** persistiert — er hängt an einem konkreten
+MIDI-Port, der beim nächsten Start ein anderer sein kann.)
 
 Die Kommandoleiste **dupliziert keine Logik**. Ihre Buttons delegieren an die
 echten Bedienelemente (`btnPlay.click()`), und ein `requestAnimationFrame`-Loop

@@ -149,7 +149,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
 <h1>&#127929; MIDI PERFECT 2</h1>
 <p class="sub">Multi-Lane Generator &middot; Drums + 137 Styles &middot; Band-Presets &middot; Infinity Mutation &middot; SMF Export &middot; MIDI Clock &amp; MMC &rarr; Cubase</p>
-<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-D &middot; Kommandoleiste / Volle Breite / Klapp-Panels</span></p>
+<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-F &middot; MIDI-Clock-Slave (DAW gibt den Takt vor)</span></p>
 
 <div class="grid">
 
@@ -213,9 +213,11 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 </div>
 
 <div class="panel">
-  <div class="ptitle"><span>&#128257; Cubase Sync</span><span class="hint">MIDI Clock = Tempo &middot; MMC = Transport (Play/Rec)</span></div>
+  <div class="ptitle"><span>&#128257; DAW Sync</span><span class="hint">MMC = Transport (Play/Rec) &middot; MIDI Clock nur f&uuml;r Hardware, NICHT f&uuml;r Cubase</span></div>
   <div class="row">
-    <div class="field"><label>&nbsp;</label><button class="tgl" id="syncTgl" title="Sendet MIDI Clock (F8) im aktuellen Tempo plus Start/Stop">&#9679; CLOCK OFF</button></div>
+    <div class="field"><label>&nbsp;</label><button class="tgl" id="syncTgl" title="Sendet MIDI Clock (F8) im aktuellen Tempo plus Start/Stop. Cubase kann MIDI Clock nicht empfangen – nur f&uuml;r Hardware.">&#9679; CLOCK OFF</button></div>
+    <div class="field"><label>&nbsp;</label><button class="tgl" id="slaveTgl" title="Der Generator folgt der MIDI Clock einer DAW oder Hardware. Tempo, Start, Stop und Position kommen dann von dort.">&#9679; SLAVE OFF</button></div>
+    <div class="field"><label>Clock-Eingang</label><select id="clkIn"><option value="">&mdash; kein Eingang &mdash;</option></select></div>
     <div class="field"><label>Sync-Ausgang</label><select id="syncPort"><option value="">= Haupt-Output</option></select></div>
     <div class="field"><label>Transportbefehl</label><select id="syncStart">
       <option value="start" selected>Start (von vorn)</option>
@@ -235,13 +237,25 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
     <button class="rh" id="btnMmcPlay">&#9654; Cubase Play</button>
     <button class="rh" id="btnMmcRec">&#9679; Cubase Record</button>
     <button class="rh" id="btnMmcStop">&#9632; Cubase Stop</button>
-    <button class="rh" id="btnClkPulse">&#9201; Tempo-Handshake (4 Takte Clock)</button>
+    <button class="rh" id="btnClkPulse" title="Nur f&uuml;r Hardware-Sequencer/Drumcomputer. Cubase ignoriert MIDI Clock.">&#9201; Clock-Burst (4 Takte)</button>
     <span class="mini" id="syncInfo" style="flex:1;min-width:220px">Clock aus.</span>
+    <span class="mini" id="slaveInfo" style="flex:1 0 100%;font-family:ui-monospace,Menlo,monospace">Slave aus.</span>
   </div>
   <div class="hint2">
-    <b>Cubase-Setup Tempo-Sync:</b> Transport &rarr; Projekt-Synchronisationseinstellungen &rarr; Timecode-Quelle <b>MIDI Timecode/MIDI Clock</b>, Eingang = derselbe Port (IAC), <b>Sync aktivieren</b> in der Transportleiste. Cubase übernimmt dann Tempo und Position von dieser Seite.<br>
-    <b>Setup Play/Record:</b> Projekt-Synchronisation &rarr; <b>MMC Slave aktiv</b>, MMC-Eingang = IAC, Device-ID identisch (127 = alle). Record startet mit Record&nbsp;Strobe + Deferred&nbsp;Play. MMC braucht die SysEx-Freigabe des Browsers – Status siehe Log.<br>
-    <b>Count-In</b> lässt Cubase vorlaufen, bevor die erste Note kommt – ideal zum Aufnehmen.
+    <b style="color:#ffcc00">&#9888; Cubase kann sich nicht auf MIDI Clock synchronisieren.</b> Als Sync-Quelle akzeptiert Cubase ausschließlich
+    MIDI&nbsp;Timecode, ASIO&nbsp;Positioning oder VST&nbsp;System&nbsp;Link – siehe Projekt-Synchronisationseinstellungen &rarr; Quellen.
+    Der Clock-Schalter und der Clock-Burst sind daher für <b>Hardware</b> gedacht (Drumcomputer, Groovebox, Looper).
+    <b>Das Tempo muss in Cubase von Hand auf denselben Wert gesetzt werden.</b><br>
+    <b>Setup Play/Record (funktioniert):</b> Transport &rarr; Projekt-Synchronisationseinstellungen &rarr; Gerätesteuerung &rarr;
+    <b>MMC-Slave aktiv</b>, MIDI-Eingang = IAC-Treiber Bus 1, MMC-Gerätekennung identisch (127 = alle).
+    Record startet mit Record&nbsp;Strobe + Deferred&nbsp;Play. MMC braucht die SysEx-Freigabe des Browsers – Status siehe Log.<br>
+    <b>Count-In</b> lässt Cubase vorlaufen, bevor die erste Note kommt – ideal zum Aufnehmen.<br>
+    <b style="color:#22cc88">Clock-Slave (Cubase gibt den Takt vor):</b> Das ist die Richtung, die mit Cubase wirklich funktioniert.
+    In Cubase unter Projekt-Synchronisationseinstellungen &rarr; <b>Ziele</b> die <b>MIDI-Clock-Ausgabe auf den IAC-Bus</b> aktivieren,
+    hier <b>SLAVE</b> einschalten und denselben Bus als Clock-Eingang wählen. Ein IAC-Bus trägt beide Richtungen gleichzeitig –
+    ein zweiter Bus ist sauberer, aber nicht nötig. Danach starten und stoppen Cubases Transport diese Seite mit,
+    Tempo und Position kommen aus Cubase, der BPM-Regler folgt automatisch.
+    Clock-Ausgang und Slave schließen sich gegenseitig aus.
   </div>
 </div>
 
@@ -1812,6 +1826,7 @@ function populateOutputs(){
     sp.innerHTML=h;
     if(keep&&midiAccess.outputs.get(keep))sp.value=keep;
   }
+  populateInputs();
   log('MIDI bereit: '+outs.map(function(o){return o.name;}).join(', '),'ok');
 }
 var gSysex=false;
@@ -1892,6 +1907,112 @@ function sendSync(bytes,time){
   var o=syncOut(); if(!o)return;
   try{ if(time===undefined)o.send(bytes); else o.send(bytes,time); }catch(e){}
 }
+/* ============================================================
+   7c · MIDI-CLOCK-SLAVE
+   Cubase kann sich nicht auf eingehende Clock synchronisieren, umgekehrt aber
+   sehr wohl Clock ausgeben. Also dreht dieser Modus die Rollen um: die DAW hält
+   die Zeit, der Generator hängt sich dran.
+
+   Position kommt ausschließlich aus den eingehenden F8-Ticks (je PPQ/24 Ticks).
+   Zwischen zwei Clocks wird linear interpoliert, damit der Lookahead-Scheduler
+   unverändert weiterarbeiten kann. Das Tempo ergibt sich aus dem gleitenden
+   Mittel der letzten 24 Clock-Abstände (= eine Viertel) – kurz genug für echte
+   Tempoänderungen, lang genug gegen Jitter.
+   ============================================================ */
+var ext={on:false,input:null,running:false,last:0,ivl:[],mpt:0,bpm:0,ticks:0};
+function extSlaving(){return ext.on&&!!ext.input;}
+function curMpt(){
+  if(extSlaving()&&ext.mpt>0)return ext.mpt;
+  return msPerTick(parseInt(gEl('bpm').value,10));
+}
+function extInfo(msg,cls){
+  var e=gEl('slaveInfo'); if(!e)return;
+  e.innerHTML=msg; e.style.color=cls==='ok'?'#22cc88':cls==='w'?'#ffcc00':'#7b86a6';
+}
+function extStatus(){
+  if(!ext.on){extInfo('Slave aus.');return;}
+  if(!ext.input){extInfo('SLAVE an, aber kein Clock-Eingang gewählt.','w');return;}
+  var stalled=ext.running&&ext.last&&(performance.now()-ext.last)>900;
+  extInfo('SLAVE &larr; '+ext.input.name+' &middot; '+
+          (stalled?'<b style="color:#ff4455">Clock abgerissen</b>':ext.running?'l&auml;uft':'wartet auf Start')+
+          (ext.bpm?' &middot; '+ext.bpm.toFixed(1)+' BPM erkannt':' &middot; noch kein Clock-Signal')+
+          ' &middot; '+ext.ticks+' Clocks','ok');
+}
+function extBpmDisplay(){
+  if(!ext.bpm)return;
+  var r=Math.round(ext.bpm), sl=gEl('bpm'), vd=gEl('bpmVal');
+  if(sl&&parseInt(sl.value,10)!==r&&r>=20&&r<=400){ sl.value=String(r); if(vd)vd.textContent=String(r); }
+}
+function extAttach(){
+  if(ext.input){try{ext.input.onmidimessage=null;}catch(e){}}
+  ext.input=null; ext.running=false; ext.last=0; ext.ivl=[]; ext.mpt=0; ext.bpm=0; ext.ticks=0;
+  var sel=gEl('clkIn');
+  if(!ext.on||!sel||!sel.value||!midiAccess){extStatus();return;}
+  var i=midiAccess.inputs.get(sel.value);
+  if(!i){extStatus();return;}
+  ext.input=i;
+  i.onmidimessage=extMessage;
+  log('Clock-Slave h&ouml;rt auf '+i.name,'m');
+  extStatus();
+}
+function extMessage(e){
+  if(!ext.on)return;
+  var d=e.data, st=d[0], now=(typeof e.timeStamp==='number'&&e.timeStamp>0)?e.timeStamp:performance.now();
+  if(st===0xF8)      extClock(now);
+  else if(st===0xFA) extStart(0,now);
+  else if(st===0xFB) extStart(-1,now);
+  else if(st===0xFC) extStop();
+  else if(st===0xF2) extSpp(((d[2]&127)<<7)|(d[1]&127));
+}
+function extClock(now){
+  ext.ticks++;
+  if(ext.last){
+    var dt=now-ext.last;
+    if(dt>1.5&&dt<400){                       // 20..400 BPM, alles andere ist Müll
+      ext.ivl.push(dt); if(ext.ivl.length>48)ext.ivl.shift();
+      var sum=0; for(var i=0;i<ext.ivl.length;i++)sum+=ext.ivl[i];
+      var avg=sum/ext.ivl.length;
+      ext.mpt=avg/CLKDIV;
+      ext.bpm=60000/(avg*24);
+    }
+  }
+  ext.last=now;
+  if(!ext.running||!sched.on)return;
+  sched.tickRef+=CLKDIV;                      // Position kommt NUR aus der Clock
+  sched.msRef=now;
+  if(sched.loopTicks>0&&sched.tickRef>=sched.loopTicks&&sched.idx>=sched.ev.length){
+    sched.tickRef-=sched.loopTicks; sched.loop++; loadLoopEvents();
+  }
+}
+function extStart(pos,now){
+  ext.running=true; ext.last=0; ext.ivl=[];
+  var t=(pos>=0)?pos:sched.tickRef;
+  if(!playing){ gEl('btnPlay').click(); }
+  sched.tickRef=t; sched.msRef=now||performance.now(); sched.idx=0;
+  if(sched.loopTicks>0&&t>=sched.loopTicks)sched.tickRef=t%sched.loopTicks;
+  while(sched.idx<sched.ev.length&&sched.ev[sched.idx].t<sched.tickRef)sched.idx++;
+  log('Clock-Slave: '+(pos>=0?'START':'CONTINUE')+' von extern','p');
+  extStatus();
+}
+function extStop(){
+  ext.running=false;
+  if(playing)stopTransport(false);
+  log('Clock-Slave: STOP von extern','p');
+  extStatus();
+}
+function extSpp(sixteenths){
+  var t=sixteenths*S16;
+  if(sched.loopTicks>0)t=t%sched.loopTicks;
+  sched.tickRef=t; sched.msRef=performance.now(); sched.idx=0;
+  while(sched.idx<sched.ev.length&&sched.ev[sched.idx].t<t)sched.idx++;
+}
+function populateInputs(){
+  var sel=gEl('clkIn'); if(!sel||!midiAccess)return;
+  var keep=sel.value, h='<option value="">&mdash; kein Eingang &mdash;</option>';
+  midiAccess.inputs.forEach(function(i){h+='<option value="'+i.id+'">'+i.name+'</option>';});
+  sel.innerHTML=h;
+  if(keep&&midiAccess.inputs.get(keep))sel.value=keep;
+}
 function mmc(cmd,quiet){
   if(!gSysex){ if(!quiet)log('MMC nicht möglich – der Browser hat SysEx nicht freigegeben. Seite neu laden und Zugriff erlauben, oder MIDI Clock verwenden.','w'); return false; }
   var d=clamp(parseInt(gEl('mmcDev').value,10)||0,0,127);
@@ -1899,6 +2020,7 @@ function mmc(cmd,quiet){
   return true;
 }
 function cubaseStart(){
+  if(extSlaving())return;                  // Cubase führt bereits – kein MMC zurückschicken
   var act=gEl('cubAct').value;
   if(act==='play'){ if(mmc(0x02))log('MMC Play &rarr; Cubase','p'); }
   else if(act==='rec'){
@@ -1906,24 +2028,25 @@ function cubaseStart(){
   }
 }
 function cubaseStopCmd(force){
+  if(extSlaving())return;
   if(!force&&gEl('cubStop').value!=='1')return;
   var act=gEl('cubAct').value;
   if(act==='rec')mmc(0x07,true);
   if(act!=='none'||force)mmc(0x01,true);
 }
 function clockStart(){
-  if(!syncActive())return;
+  if(extSlaving()||!syncActive())return;
   if(gEl('syncStart').value==='start'){ sendSync([0xF2,0x00,0x00]); sendSync([0xFA]); }
   else sendSync([0xFB]);
   log('MIDI Clock gestartet ('+gEl('bpm').value+' BPM) &rarr; '+(syncOut()?syncOut().name:'—'),'m');
 }
-function clockStop(){ if(syncActive())sendSync([0xFC]); }
+function clockStop(){ if(!extSlaving()&&syncActive())sendSync([0xFC]); }
 /* Clock bewusst mit kürzerem Vorlauf als die Noten (CLKAHEAD statt LOOKAHEAD):
    bei einer Tempoänderung stehen dann nur ~70 ms alte Clocks in der Queue,
    Cubase zieht das Tempo praktisch verzögerungsfrei nach. */
 var CLKAHEAD=70;
 function pumpClock(curTick,now,mpt){
-  if(!syncActive())return;
+  if(extSlaving()||!syncActive())return;
   var horizon=curTick+CLKAHEAD/mpt, guard=0;
   while(sched.clkTick<horizon&&guard++<600){
     sendSync([0xF8],now+(sched.clkTick-curTick)*mpt);
@@ -2122,11 +2245,13 @@ function reloadSoon(){
 function schedTick(){
   if(!sched.on)return;
   var now=performance.now();
-  var bpm=parseInt(document.getElementById('bpm').value,10);
   var hum=parseInt(document.getElementById('human').value,10)/100;
-  var mpt=msPerTick(bpm);
+  var mpt=curMpt();
+  var slave=extSlaving();
+  // Im Slave-Modus gehört sched.tickRef der Clock-Routine; hier wird zwischen zwei
+  // Clocks nur interpoliert, damit der Lookahead weiterhin greift.
   var curTick=sched.tickRef+(now-sched.msRef)/mpt;
-  sched.tickRef=curTick; sched.msRef=now;
+  if(!slave){ sched.tickRef=curTick; sched.msRef=now; }
   var horizon=curTick+LOOKAHEAD/mpt;
   pumpClock(curTick,now,mpt);              // MIDI Clock für Cubase im selben Zeitraster
 
@@ -2179,9 +2304,9 @@ function schedTick(){
         document.getElementById('mtag').innerHTML='&#10022; MUTATE '+ch;
         setTimeout(function(){var m=document.getElementById('mtag');if(m)m.innerHTML='';},900);
       }
-      sched.tickRef=curTick-sched.loopTicks;
+      if(slave){ sched.tickRef-=sched.loopTicks; }   // Clock-Routine behält die Zeitbasis
+      else { sched.tickRef=curTick-sched.loopTicks; sched.msRef=now; }
       sched.clkTick-=sched.loopTicks;      // Clock läuft ohne Sprung weiter
-      sched.msRef=now;
       loadLoopEvents();
     }
   }
@@ -2194,8 +2319,8 @@ function startTransport(){
   loadLoopEvents();
   sendAllPrograms();                       // Sounds setzen, bevor die erste Note kommt
   var bpm0=parseInt(document.getElementById('bpm').value,10);
-  var ci=parseInt(document.getElementById('countIn').value,10)||0;
-  sched.tickRef=-(ci*BAR+120/msPerTick(bpm0));
+  var ci=extSlaving()?0:(parseInt(document.getElementById('countIn').value,10)||0);
+  sched.tickRef=extSlaving()?0:-(ci*BAR+120/msPerTick(bpm0));
   sched.clkTick=Math.ceil(sched.tickRef/CLKDIV)*CLKDIV;
   sched.msRef=performance.now();
   sched.on=true;
@@ -2625,6 +2750,9 @@ document.getElementById('infTgl').onclick=function(){
 document.getElementById('btnDice').onclick=function(){reroll(null);};
 /* --- Cubase Sync --- */
 document.getElementById('syncTgl').onclick=function(){
+  if(!this.classList.contains('on')&&extSlaving()){
+    log('Clock-Ausgang nicht möglich, solange SLAVE an ist.','w'); return;
+  }
   var on=this.classList.toggle('on');
   this.innerHTML=on?'&#10003; CLOCK AN':'&#9679; CLOCK OFF';
   if(!on&&playing)sendSync([0xFC]);
@@ -2636,6 +2764,18 @@ document.getElementById('syncTgl').onclick=function(){
   syncInfo();
 };
 document.getElementById('syncPort').onchange=syncInfo;
+document.getElementById('slaveTgl').onclick=function(){
+  ext.on=this.classList.toggle('on');
+  this.innerHTML=ext.on?'&#10003; SLAVE AN':'&#9679; SLAVE OFF';
+  if(ext.on){
+    var st=document.getElementById('syncTgl');
+    if(st.classList.contains('on')){ st.click(); log('Clock-Ausgang abgeschaltet – Slave und Master schließen sich aus.','w'); }
+    if(playing)stopTransport(false);
+  }
+  extAttach(); syncInfo();
+};
+document.getElementById('clkIn').onchange=function(){ extAttach(); };
+setInterval(function(){ if(ext.on){extStatus(); extBpmDisplay();} },400);
 document.getElementById('cubAct').onchange=syncInfo;
 document.getElementById('btnMmcPlay').onclick=function(){if(mmc(0x02))log('MMC Play gesendet','p');};
 document.getElementById('btnMmcRec').onclick=function(){
