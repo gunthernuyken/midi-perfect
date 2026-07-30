@@ -149,7 +149,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
 <h1>&#127929; MIDI PERFECT 2</h1>
 <p class="sub">Multi-Lane Generator &middot; Drums + 137 Styles &middot; Band-Presets &middot; Infinity Mutation &middot; SMF Export &middot; MIDI Clock &amp; MMC &rarr; Cubase</p>
-<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-G &middot; Clock-Slave: Zeitbasis-Fix</span></p>
+<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-H &middot; Clock-Slave: Tempomessung + MMC im Slave</span></p>
 
 <div class="grid">
 
@@ -1919,7 +1919,7 @@ function sendSync(bytes,time){
    Mittel der letzten 24 Clock-Abstände (= eine Viertel) – kurz genug für echte
    Tempoänderungen, lang genug gegen Jitter.
    ============================================================ */
-var ext={on:false,input:null,running:false,last:0,ivl:[],mpt:0,bpm:0,ticks:0};
+var ext={on:false,input:null,running:false,hist:[],mpt:0,bpm:0,ticks:0,last:0,busy:false};
 function extSlaving(){return ext.on&&!!ext.input;}
 function curMpt(){
   if(extSlaving()&&ext.mpt>0)return ext.mpt;
@@ -1934,7 +1934,8 @@ function extStatus(){
   if(!ext.input){extInfo('SLAVE an, aber kein Clock-Eingang gewählt.','w');return;}
   var stalled=ext.running&&ext.last&&(performance.now()-ext.last)>900;
   extInfo('SLAVE &larr; '+ext.input.name+' &middot; '+
-          (stalled?'<b style="color:#ff4455">Clock abgerissen</b>':ext.running?'l&auml;uft':'wartet auf Start')+
+          (stalled?'<b style="color:#ff4455">Clock abgerissen</b>':ext.running?'l&auml;uft':
+             (playing?'<b style="color:#ffcc00">bereit &ndash; wartet auf DAW-Start</b>':'wartet auf Start'))+
           (ext.bpm?' &middot; '+ext.bpm.toFixed(1)+' BPM erkannt':' &middot; noch kein Clock-Signal')+
           ' &middot; '+ext.ticks+' Clocks','ok');
 }
@@ -1945,7 +1946,7 @@ function extBpmDisplay(){
 }
 function extAttach(){
   if(ext.input){try{ext.input.onmidimessage=null;}catch(e){}}
-  ext.input=null; ext.running=false; ext.last=0; ext.ivl=[]; ext.mpt=0; ext.bpm=0; ext.ticks=0;
+  ext.input=null; ext.running=false; ext.last=0; ext.hist=[]; ext.mpt=0; ext.bpm=0; ext.ticks=0;
   var sel=gEl('clkIn');
   if(!ext.on||!sel||!sel.value||!midiAccess){extStatus();return;}
   var i=midiAccess.inputs.get(sel.value);
@@ -1971,18 +1972,20 @@ function extMessage(e){
   else if(st===0xF2) extSpp(((d[2]&127)<<7)|(d[1]&127));
 }
 function extClock(now){
-  ext.ticks++;
-  if(ext.last){
-    var dt=now-ext.last;
-    if(dt>1.5&&dt<400){                       // 20..400 BPM, alles andere ist Müll
-      ext.ivl.push(dt); if(ext.ivl.length>48)ext.ivl.shift();
-      var sum=0; for(var i=0;i<ext.ivl.length;i++)sum+=ext.ivl[i];
-      var avg=sum/ext.ivl.length;
-      ext.mpt=avg/CLKDIV;
-      ext.bpm=60000/(avg*24);
-    }
+  ext.ticks++; ext.last=now;
+  /* Tempo aus der Gesamtspanne der letzten 96 Clocks, nicht aus Einzelabständen.
+     Chrome liefert MIDI-Realtime-Bytes oft gebündelt: mehrere F8 im selben
+     Eventloop-Durchlauf mit ~0 ms Abstand, danach eine große Lücke. Ein Mittel
+     über Einzelabstände muss die Nullabstände wegfiltern und misst dann nur noch
+     die Lücken – das Ergebnis war rund die Hälfte des echten Tempos. Über die
+     Gesamtspanne geteilt durch die Anzahl stimmt es unabhängig von der Bündelung. */
+  ext.hist.push(now);
+  if(ext.hist.length>96)ext.hist.shift();
+  if(ext.hist.length>=24){
+    var span=ext.hist[ext.hist.length-1]-ext.hist[0], n=ext.hist.length-1;
+    var perClock=span/n;
+    if(perClock>0.3&&perClock<400){ ext.mpt=perClock/CLKDIV; ext.bpm=60000/(perClock*24); }
   }
-  ext.last=now;
   if(!ext.running||!sched.on)return;
   sched.tickRef+=CLKDIV;                      // Position kommt NUR aus der Clock
   sched.msRef=now;
@@ -1990,9 +1993,11 @@ function extClock(now){
   // beiden einmal ab und der Zeiger springt einen ganzen Durchlauf zu weit zurück.
 }
 function extStart(pos,now){
-  ext.running=true; ext.last=0; ext.ivl=[];
+  ext.running=true;
   var t=(pos>=0)?pos:sched.tickRef;
+  ext.busy=true;
   if(!playing){ gEl('btnPlay').click(); }
+  ext.busy=false;
   sched.tickRef=t; sched.msRef=now||performance.now(); sched.idx=0;
   if(sched.loopTicks>0&&t>=sched.loopTicks)sched.tickRef=t%sched.loopTicks;
   while(sched.idx<sched.ev.length&&sched.ev[sched.idx].t<sched.tickRef)sched.idx++;
@@ -2001,7 +2006,9 @@ function extStart(pos,now){
 }
 function extStop(){
   ext.running=false;
+  ext.busy=true;
   if(playing)stopTransport(false);
+  ext.busy=false;
   log('Clock-Slave: STOP von extern','p');
   extStatus();
 }
@@ -2024,8 +2031,13 @@ function mmc(cmd,quiet){
   sendSync([0xF0,0x7F,d,0x06,cmd&127,0xF7]);
   return true;
 }
+/* MMC ist ein Befehlskanal, keine Clock – im Slave-Modus ist es genau das,
+   was man will: der große PLAY-Button startet Cubase, Cubase schickt daraufhin
+   sein FA zurück und beide laufen synchron los. Nur während der Generator selbst
+   gerade auf ein externes FA/FC reagiert (ext.busy), wird nichts zurückgeschickt –
+   sonst würde ein von Cubase kommendes Start/Stop sofort wieder an Cubase gehen. */
 function cubaseStart(){
-  if(extSlaving())return;                  // Cubase führt bereits – kein MMC zurückschicken
+  if(ext.busy)return;
   var act=gEl('cubAct').value;
   if(act==='play'){ if(mmc(0x02))log('MMC Play &rarr; Cubase','p'); }
   else if(act==='rec'){
@@ -2033,7 +2045,7 @@ function cubaseStart(){
   }
 }
 function cubaseStopCmd(force){
-  if(extSlaving())return;
+  if(ext.busy)return;
   if(!force&&gEl('cubStop').value!=='1')return;
   var act=gEl('cubAct').value;
   if(act==='rec')mmc(0x07,true);
@@ -2337,6 +2349,8 @@ function startTransport(){
   clockStart();                            // MIDI Clock + Start/Continue an Cubase
   cubaseStart();                           // optional MMC Play/Record
   if(ci)log('Count-In: '+ci+' Takt(e) Vorlauf – Cubase läuft, Noten folgen danach.','m');
+  if(extSlaving()&&!ext.running)
+    log('SLAVE: Transport steht bereit und wartet auf das Start-Signal der DAW.','w');
   syncInfo();
   sched.timer=setInterval(schedTick,SCHED_TICK);
 }

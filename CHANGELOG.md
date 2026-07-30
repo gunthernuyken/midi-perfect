@@ -7,6 +7,51 @@ gar nicht geladen".
 
 ---
 
+## BUILD 2026-07-30-H — Tempomessung und MMC im Slave-Modus
+
+Zwei Fehler, die erst im echten Betrieb mit Cubase auffielen.
+
+**1 · Tempo wurde etwa halb so hoch gemessen wie es war.**
+Bei 111 BPM Projekttempo zeigte die Slave-Statuszeile 61 BPM.
+
+Ursache: Chrome stellt MIDI-Realtime-Bytes gebündelt zu — mehrere `F8` im
+selben Eventloop-Durchlauf mit nahezu 0 ms Abstand, danach eine große Lücke.
+Die Tempomessung mittelte über Einzelabstände und musste die Nullabstände als
+Ausreißer wegfiltern; übrig blieben nur die Lücken, also ein zu großer
+Mittelwert und damit ein zu niedriges Tempo.
+
+Gefixt: Tempo kommt jetzt aus der **Gesamtspanne der letzten 96 Clocks geteilt
+durch deren Anzahl**. Das ist unabhängig davon, ob der Browser einzeln oder
+gebündelt zustellt. Verifiziert mit einem absichtlich bündelnden Testmaster
+(4 Clocks am Stück): vorher rund die Hälfte, jetzt 110 statt 111 BPM.
+
+Auf die Wiedergabeposition hatte der Fehler keinen Einfluss — die zählt
+Clock-Ticks und misst keine Zeit. Betroffen waren die Anzeige, der mitlaufende
+BPM-Regler und das Tempo im SMF-Export.
+
+**2 · Der große PLAY-Button startete Cubase nur beim ersten Mal.**
+
+Ursache: Build F unterdrückte im Slave-Modus pauschal *alle* MMC-Sendungen —
+gedacht als Rückkopplungsschutz, aber zu grob. MMC ist ein Befehlskanal, keine
+Clock. Genau die Kombination ist der sinnvolle Arbeitsablauf: PLAY im Generator
+startet Cubase per MMC, Cubase schickt daraufhin sein `FA`, beide laufen
+synchron los.
+
+Gefixt: MMC ist im Slave-Modus wieder aktiv. Der Rückkopplungsschutz sitzt jetzt
+präzise da, wo er hingehört — ein `ext.busy`-Flag während der Verarbeitung eines
+eingehenden `FA`/`FC`. Ein von Cubase kommendes Start oder Stop geht dadurch
+nicht als MMC an Cubase zurück. Der Clock-Ausgang bleibt im Slave-Modus
+weiterhin komplett gesperrt.
+
+Zusätzlich: Drückt man PLAY, während die DAW steht, zeigt die Statuszeile jetzt
+**„bereit – wartet auf DAW-Start"** statt scheinbar zu hängen.
+
+**Verifiziert** über drei Play/Stop-Zyklen gegen einen Fake-Cubase, der auf MMC
+reagiert: jedes Mal startet und stoppt der Transport auf beiden Seiten, Noten
+fließen in jeder Runde.
+
+---
+
 ## BUILD 2026-07-30-G — Clock-Slave: Zeitbasis-Fix
 
 **Problem:** Im Slave-Modus lief die Synchronisation sichtbar korrekt — Clocks
