@@ -190,9 +190,12 @@ Drei getrennte `localStorage`-Schlüssel:
 |---|---|
 | `midiperfect2.lanes.v1` | Lane-Zustand (on, ch, prog, style, oct, vel, dens, lock, fill) |
 | `midiperfect2.panels.v1` | Welche Panels eingeklappt sind |
+| `midiperfect2.sync.v1` | Komplettes DAW-Sync-Panel inkl. Slave-Zustand |
 
-(Der Slave-Modus wird bewusst **nicht** persistiert — er hängt an einem konkreten
-MIDI-Port, der beim nächsten Start ein anderer sein kann.)
+MIDI-Ports werden im Sync-Zustand über ihren **Namen** abgelegt, nicht über die
+ID — die vergibt der Browser pro Sitzung neu. Fehlt der Port beim Laden, bleibt
+SLAVE aus und es gibt eine Log-Warnung, statt stillschweigend einen anderen Port
+zu nehmen.
 
 Die Kommandoleiste **dupliziert keine Logik**. Ihre Buttons delegieren an die
 echten Bedienelemente (`btnPlay.click()`), und ein `requestAnimationFrame`-Loop

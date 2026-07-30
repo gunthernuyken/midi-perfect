@@ -117,6 +117,8 @@ nicht hier; siehe [CUBASE-SETUP.md](CUBASE-SETUP.md).
 Der Lane-Zustand (an/aus, Kanal, Style, Sound, Oktave, Velocity, Density, Lock)
 wird in `localStorage` gespeichert und beim nächsten Öffnen wiederhergestellt.
 Der Button *Lane-Zustand zurücksetzen* verwirft ihn und lädt die Werkseinstellung.
+Dasselbe gilt für die eingeklappten Panels und für das komplette
+*DAW Sync*-Panel inklusive Slave-Modus und Portwahl.
 
 ### Determinismus
 
@@ -219,8 +221,8 @@ Steht dort *aus*, behält das Instrument in der DAW seinen eigenen Klang.
 - **Fünf feste Lanes.** Die Lane-Liste ist ein Array im Code, keine UI zum
   Hinzufügen. Erweitern ist trivial (siehe ARCHITEKTUR.md), aber nicht anklickbar.
 - **Kein Undo für Lane-Einstellungen.** Nur die Progression hat eine Undo-Historie.
-- **`localStorage` ist pro Dateipfad.** Verschiebt man die HTML-Datei, ist der
-  gespeicherte Zustand weg.
+- **`localStorage` ist pro Dateipfad.** Verschiebt man die HTML-Datei, sind
+  Lane-Zustand, Panel-Zustand und DAW-Sync-Einstellungen weg.
 
 ---
 

@@ -7,6 +7,22 @@ gar nicht geladen".
 
 ---
 
+## BUILD 2026-07-30-I — DAW-Sync-Einstellungen bleiben erhalten
+
+Das ganze *DAW Sync*-Panel überlebt jetzt den Reload: Clock-Ausgang, SLAVE,
+Clock-Eingang, Sync-Ausgang, Transportbefehl, *Cubase bei PLAY*, MMC-Device,
+Count-In und *Bei STOP*.
+
+**MIDI-Ports werden über den Namen gespeichert, nicht über die ID.** Die ID
+vergibt der Browser pro Sitzung neu; der Name bleibt. Ist der gespeicherte Port
+beim nächsten Start nicht da, bleibt SLAVE aus und es steht eine Warnung im Log —
+lieber ehrlich stumm als heimlich am falschen Port hängen.
+
+Werkseinstellung von *Cubase bei PLAY* auf **Play** geändert (vorher
+*nichts senden*); das ist der Arbeitsmodus, nicht die Ausnahme.
+
+---
+
 ## BUILD 2026-07-30-H — Tempomessung und MMC im Slave-Modus
 
 Zwei Fehler, die erst im echten Betrieb mit Cubase auffielen.

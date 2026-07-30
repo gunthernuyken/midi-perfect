@@ -149,7 +149,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
 <h1>&#127929; MIDI PERFECT 2</h1>
 <p class="sub">Multi-Lane Generator &middot; Drums + 137 Styles &middot; Band-Presets &middot; Infinity Mutation &middot; SMF Export &middot; MIDI Clock &amp; MMC &rarr; Cubase</p>
-<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-H &middot; Clock-Slave: Tempomessung + MMC im Slave</span></p>
+<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-30-I &middot; DAW-Sync-Einstellungen bleiben erhalten</span></p>
 
 <div class="grid">
 
@@ -212,7 +212,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
   </div>
 </div>
 
-<div class="panel">
+<div class="panel" id="panelSync">
   <div class="ptitle"><span>&#128257; DAW Sync</span><span class="hint">MMC = Transport (Play/Rec) &middot; MIDI Clock nur f&uuml;r Hardware, NICHT f&uuml;r Cubase</span></div>
   <div class="row">
     <div class="field"><label>&nbsp;</label><button class="tgl" id="syncTgl" title="Sendet MIDI Clock (F8) im aktuellen Tempo plus Start/Stop. Cubase kann MIDI Clock nicht empfangen – nur f&uuml;r Hardware.">&#9679; CLOCK OFF</button></div>
@@ -223,8 +223,8 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
       <option value="start" selected>Start (von vorn)</option>
       <option value="cont">Continue (ab Cursor)</option></select></div>
     <div class="field"><label>Cubase bei PLAY</label><select id="cubAct">
-      <option value="none" selected>nichts senden</option>
-      <option value="play">&#9654; Play</option>
+      <option value="none">nichts senden</option>
+      <option value="play" selected>&#9654; Play</option>
       <option value="rec">&#9679; Record</option></select></div>
     <div class="field"><label>MMC Device</label><input type="number" id="mmcDev" min="0" max="127" value="127" style="width:78px"></div>
     <div class="field"><label>Count-In</label><select id="countIn">
@@ -1827,6 +1827,7 @@ function populateOutputs(){
     if(keep&&midiAccess.outputs.get(keep))sp.value=keep;
   }
   populateInputs();
+  restoreSyncPorts();
   log('MIDI bereit: '+outs.map(function(o){return o.name;}).join(', '),'ok');
 }
 var gSysex=false;
@@ -2017,6 +2018,63 @@ function extSpp(sixteenths){
   if(sched.loopTicks>0)t=t%sched.loopTicks;
   sched.tickRef=t; sched.msRef=performance.now(); sched.idx=0;
   while(sched.idx<sched.ev.length&&sched.ev[sched.idx].t<t)sched.idx++;
+}
+/* Das komplette DAW-Sync-Panel überlebt den Reload. MIDI-Ports werden über den
+   NAMEN gespeichert, nicht über die ID: die ID vergibt der Browser pro Sitzung
+   neu, der Name bleibt. Ist der Port beim nächsten Start nicht da, bleibt SLAVE
+   aus und es steht eine Meldung im Log – lieber ehrlich stumm als heimlich am
+   falschen Port hängen. */
+var LS_SYNC='midiperfect2.sync.v1';
+function optName(sel){
+  if(!sel||!sel.value)return '';
+  var o=sel.options[sel.selectedIndex];
+  return o?o.textContent:'';
+}
+function saveSync(){
+  try{
+    localStorage.setItem(LS_SYNC,JSON.stringify({
+      clock:gEl('syncTgl').classList.contains('on'),
+      slave:!!ext.on,
+      clkInName:optName(gEl('clkIn')),
+      syncPortName:optName(gEl('syncPort')),
+      syncStart:gEl('syncStart').value,
+      cubAct:gEl('cubAct').value,
+      mmcDev:gEl('mmcDev').value,
+      countIn:gEl('countIn').value,
+      cubStop:gEl('cubStop').value
+    }));
+  }catch(e){}
+}
+function readSync(){ try{return JSON.parse(localStorage.getItem(LS_SYNC)||'null');}catch(e){return null;} }
+function loadSyncControls(){
+  var st=readSync(); if(!st)return;
+  var f=['syncStart','cubAct','mmcDev','countIn','cubStop'];
+  for(var i=0;i<f.length;i++)if(st[f[i]]!==undefined&&st[f[i]]!==null&&gEl(f[i]))gEl(f[i]).value=st[f[i]];
+}
+function selByName(sel,name){
+  if(!sel||!name)return false;
+  for(var i=0;i<sel.options.length;i++)
+    if(sel.options[i].value&&sel.options[i].textContent===name){ sel.selectedIndex=i; return true; }
+  return false;
+}
+function restoreSyncPorts(){
+  var st=readSync(); if(!st)return;
+  selByName(gEl('syncPort'),st.syncPortName);
+  var okIn=selByName(gEl('clkIn'),st.clkInName);
+  if(st.slave){
+    if(okIn&&!ext.on){
+      ext.on=true;
+      var sb=gEl('slaveTgl'); sb.classList.add('on'); sb.innerHTML='&#10003; SLAVE AN';
+      extAttach();
+      log('DAW-Sync wiederhergestellt: SLAVE &larr; '+st.clkInName,'ok');
+    }else if(!okIn){
+      log('Gespeicherter Clock-Eingang &bdquo;'+st.clkInName+'&ldquo; ist nicht verf&uuml;gbar &ndash; SLAVE bleibt aus.','w');
+    }
+  }else if(st.clock&&!gEl('syncTgl').classList.contains('on')){
+    var tg=gEl('syncTgl'); tg.classList.add('on'); tg.innerHTML='&#10003; CLOCK AN';
+    log('DAW-Sync wiederhergestellt: Clock-Ausgang an','m');
+  }
+  syncInfo(); extStatus();
 }
 function populateInputs(){
   var sel=gEl('clkIn'); if(!sel||!midiAccess)return;
@@ -2784,6 +2842,7 @@ document.getElementById('syncTgl').onclick=function(){
     sched.clkTick=Math.ceil(sched.tickRef/CLKDIV)*CLKDIV;
     sendSync([0xFB]);
   }
+  saveSync();
   log(on?'MIDI Clock aktiv – Cubase auf externe Sync stellen':'MIDI Clock aus','m');
   syncInfo();
 };
@@ -2796,9 +2855,10 @@ document.getElementById('slaveTgl').onclick=function(){
     if(st.classList.contains('on')){ st.click(); log('Clock-Ausgang abgeschaltet – Slave und Master schließen sich aus.','w'); }
     if(playing)stopTransport(false);
   }
-  extAttach(); syncInfo();
+  extAttach(); syncInfo(); saveSync();
 };
-document.getElementById('clkIn').onchange=function(){ extAttach(); };
+document.getElementById('clkIn').onchange=function(){ extAttach(); saveSync(); };
+document.getElementById('panelSync').addEventListener('change',saveSync);
 setInterval(function(){ if(ext.on){extStatus(); extBpmDisplay();} },400);
 document.getElementById('cubAct').onchange=syncInfo;
 document.getElementById('btnMmcPlay').onclick=function(){if(mmc(0x02))log('MMC Play gesendet','p');};
@@ -2955,6 +3015,7 @@ document.getElementById('btnSpreadCh').onclick=function(){setAllChannels(true);}
   sel.innerHTML=h;
 })();
 buildPiano();
+loadSyncControls();
 var lsRestored=loadLaneState();
 buildLanes();
 buildChMon();
