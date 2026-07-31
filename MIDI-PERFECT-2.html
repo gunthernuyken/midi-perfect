@@ -144,12 +144,13 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
   <span class="tb-sep"></span>
   <span class="tb-lanes" id="tbLanes"></span>
   <span class="tb-spacer"></span>
+  <button class="tbl" id="langTgl" style="--lc:#00d4ff" title="Sprache umschalten / switch language"><b>DE</b> · EN</button>
   <span class="tb-hint"><kbd>Space</kbd> Play/Stop &nbsp;<kbd>1-5</kbd> Lane &nbsp;<kbd>&#8679;1-5</kbd> Solo &nbsp;<kbd>R</kbd> Reroll &nbsp;<kbd>D</kbd> Styles</span>
 </div>
 
 <h1>&#127929; MIDI PERFECT 2</h1>
 <p class="sub">Multi-Lane Generator &middot; Drums + 137 Styles &middot; Band-Presets &middot; Infinity Mutation &middot; SMF Export &middot; MIDI Clock &amp; MMC &rarr; Cubase</p>
-<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-31-K &middot; Blues-Werkstatt: Swing pro Lane &middot; Velocity-Streuung &middot; Turnaround &middot; Chorus-Dynamik</span></p>
+<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-31-L &middot; Zweisprachig DE/EN &middot; Blues-Werkstatt</span></p>
 
 <div class="grid">
 
@@ -258,7 +259,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
     <span class="mini" style="flex:1;min-width:220px" id="blChInfo">Aus.</span>
   </div>
 
-  <div class="hint2">
+  <div class="hint2" id="hintBlues">
     <b style="color:#22cc88">Swing:</b> 100 % = volles Triolen-Feel. Blues-Shuffle sitzt bei <b>62&ndash;68</b>, Slow Blues 12/8 bei <b>95&ndash;100</b>,
     Funk-Blues bei 12&ndash;20. Drum-Patterns auf Triolenraster (Blues Shuffle, Jazz Ride, Purdie) sind bereits triolisch notiert und werden
     vom Swing-Regler bewusst nicht zusätzlich verschoben &ndash; sonst käme ein doppelter Shuffle heraus.<br>
@@ -297,7 +298,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
     <span class="mini" id="syncInfo" style="flex:1;min-width:220px">Clock aus.</span>
     <span class="mini" id="slaveInfo" style="flex:1 0 100%;font-family:ui-monospace,Menlo,monospace">Slave aus.</span>
   </div>
-  <div class="hint2">
+  <div class="hint2" id="hintSync">
     <b style="color:#ffcc00">&#9888; Cubase kann sich nicht auf MIDI Clock synchronisieren.</b> Als Sync-Quelle akzeptiert Cubase ausschließlich
     MIDI&nbsp;Timecode, ASIO&nbsp;Positioning oder VST&nbsp;System&nbsp;Link – siehe Projekt-Synchronisationseinstellungen &rarr; Quellen.
     Der Clock-Schalter und der Clock-Burst sind daher für <b>Hardware</b> gedacht (Drumcomputer, Groovebox, Looper).
@@ -331,7 +332,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
   </div>
   <div class="cdisp" id="cdisp"></div>
   <div class="err" id="seqErr"></div>
-  <div class="hint2">Suffixe: <b>m &middot; 7 &middot; maj7 &middot; m7 &middot; 6 &middot; m6 &middot; 9 &middot; m9 &middot; maj9 &middot; 13 &middot; dim &middot; dim7 &middot; m7b5 &middot; aug &middot; 7#9 &middot; 7b9 &middot; sus4 &middot; sus2</b> &nbsp;|&nbsp; Beispiel: <code>Gm7:2 C7 Fmaj7:2</code></div>
+  <div class="hint2" id="hintSuffix">Suffixe: <b>m &middot; 7 &middot; maj7 &middot; m7 &middot; 6 &middot; m6 &middot; 9 &middot; m9 &middot; maj9 &middot; 13 &middot; dim &middot; dim7 &middot; m7b5 &middot; aug &middot; 7#9 &middot; 7b9 &middot; sus4 &middot; sus2</b> &nbsp;|&nbsp; Beispiel: <code>Gm7:2 C7 Fmaj7:2</code></div>
 </div>
 
 <div class="panel">
@@ -437,6 +438,379 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
 <script>
 "use strict";
+/* ============================================================
+   0b · ZWEISPRACHIGKEIT (DE / EN)
+
+   Das Wörterbuch wird über die deutsche Zeichenkette adressiert, nicht über
+   Schlüssel. Damit bleibt das Markup unangetastet — kein einziges data-i18n —
+   und dynamisch gebaute Bereiche (Lanes, Style-Listen, Presets, Takt-Blöcke)
+   laufen automatisch über denselben Weg, sobald ein MutationObserver sie sieht.
+   Fehlt eine Übersetzung, bleibt der deutsche Text stehen. Nichts kann brechen,
+   nur unübersetzt bleiben.
+   ============================================================ */
+var LS_LANG='midiperfect2.lang', i18nBusy=false, i18nObs=null;
+var LANG=(function(){try{var v=localStorage.getItem(LS_LANG);return v==='en'?'en':'de';}catch(e){return 'de';}})();
+
+/* Lange Hilfetexte am Stück, sonst entsteht aus den <b>-Fragmenten
+   englischer Kauderwelsch mit deutscher Wortstellung. */
+var I18N_HTML={
+ hintBlues:'<b style="color:#22cc88">Swing:</b> 100 % is a full triplet feel. Blues shuffle sits at <b>62&ndash;68</b>, slow blues 12/8 at <b>95&ndash;100</b>, funk blues at 12&ndash;20. Drum patterns on a triplet grid (Blues Shuffle, Jazz Ride, Purdie) are already written as triplets and are deliberately <i>not</i> shifted again by the swing slider &ndash; that would produce a double shuffle.<br><b style="color:#22cc88">Chorus dynamics</b> send the expression CC on every melodic and harmonic channel. On a tonewheel organ (Blue3, B-3X) you can point it at a drawbar CC instead; Kontakt instruments usually want CC11, EZbass and EZkeys CC7. The hi-hat moves to the ride from the configured chorus onward, and to the bell in the peak chorus.',
+ hintSync:'<b style="color:#ffcc00">&#9888; Cubase cannot slave to MIDI Clock.</b> As a sync source it accepts only MIDI&nbsp;Timecode, ASIO&nbsp;Positioning or VST&nbsp;System&nbsp;Link &ndash; see Project Synchronisation Setup &rarr; Sources. The clock switch and the clock burst are therefore meant for <b>hardware</b> (drum machines, grooveboxes, loopers). <b>The tempo has to be set to the same value in Cubase by hand.</b><br><b>Play/Record setup (this one works):</b> Transport &rarr; Project Synchronisation Setup &rarr; Machine Control &rarr; <b>MMC Slave Active</b>, MIDI input = IAC Driver Bus 1, MMC device ID identical (127 = all). Record starts with Record Strobe + Deferred Play. MMC needs the browser SysEx permission &ndash; see the log for status.<br><b>Count-in</b> lets Cubase roll before the first note arrives &ndash; useful when recording.<br><b style="color:#22cc88">Clock slave (Cubase sets the beat):</b> this is the direction that actually works with Cubase. In Cubase under Project Synchronisation Setup &rarr; <b>Destinations</b> enable <b>MIDI Clock Out to the IAC bus</b>, switch <b>SLAVE</b> on here and pick the same bus as clock input. One IAC bus carries both directions at once &ndash; a second bus is tidier but not required. From then on Cubase\'s transport starts and stops this page, tempo and position come from Cubase, and the BPM slider follows automatically. Clock output and slave are mutually exclusive.',
+ hintSuffix:'Suffixes: <b>m &middot; 7 &middot; maj7 &middot; m7 &middot; 6 &middot; m6 &middot; 9 &middot; m9 &middot; maj9 &middot; 13 &middot; dim &middot; dim7 &middot; m7b5 &middot; aug &middot; 7#9 &middot; 7b9 &middot; sus4 &middot; sus2</b> &nbsp;|&nbsp; Example: <code>Gm7:2 C7 Fmaj7:2</code>'
+};
+
+var I18N={
+/* --- Kopf, Kommandoleiste ------------------------------------ */
+'Multi-Lane Generator · Drums + 137 Styles · Band-Presets · Infinity Mutation · SMF Export · MIDI Clock & MMC → Cubase':
+ 'Multi-lane generator · drums + 137 styles · band presets · infinity mutation · SMF export · MIDI Clock & MMC → Cubase',
+'Lane':'Lane','Solo':'Solo','Styles':'Styles',
+'Reroll aller nicht gesperrten Lanes (R)':'Reroll every unlocked lane (R)',
+'Alle nicht gesperrten Lanes neu würfeln':'Reroll every unlocked lane',
+/* --- MIDI Connection ----------------------------------------- */
+'Lanes senden auf eigenen Kanälen':'Each lane sends on its own channel',
+'Initialisiere…':'Initialising…',
+'Alle Lanes auf':'All lanes to',
+'→ einen Kanal legen':'→ one single channel',
+'→ ab Startkanal fortlaufend verteilen':'→ spread from start channel',
+'Eine Cubase-Spur pro Kanal = getrennte Instrumente. Nur eine Spur? Dann alles auf einen Kanal legen.':
+ 'One DAW track per channel = separate instruments. Only one track? Then put everything on one channel.',
+'Routing (manuell):':'Routing (manual):','(aus)':'(off)',
+'🎸 GM-Standardsounds pro Lane setzen':'🎸 Set GM default sounds per lane',
+'⊘ Sound-Zuweisung abschalten':'⊘ Disable sound assignment',
+'↻ Lane-Zustand zurücksetzen':'↻ Reset lane state',
+'Gespeicherten Lane-Zustand verwerfen und Werkseinstellung laden':'Discard the stored lane state and load factory settings',
+'Program Change landet im Export und wird beim Play gesendet. Aus = dein Instrument behält seinen Sound.':
+ 'Program change is written to the export and sent on play. Off = your instrument keeps its own sound.',
+'○ Kanalsperre':'○ Channel lock','● Kanalsperre':'● Channel lock',
+'○ MIDI-Monitor':'○ MIDI monitor','● MIDI-Monitor':'● MIDI monitor',
+'↻ Monitor leeren':'↻ Clear monitor',
+'Blockt JEDE MIDI-Nachricht auf Kanälen, die keiner eingeschalteten Lane gehören – inkl. Program Change und All-Notes-Off':
+ 'Blocks EVERY MIDI message on channels that belong to no active lane — including program change and all-notes-off',
+'Protokolliert jede gesendete MIDI-Nachricht mit Kanal':'Logs every outgoing MIDI message with its channel',
+'Kanalsperre an = es verlässt garantiert nichts das Programm auf einem fremden Kanal. Kommt in Cubase trotzdem etwas an, liegt es nicht an dieser Seite.':
+ 'Channel lock on = nothing can leave this page on a foreign channel. If the DAW still receives something, it is provably not this page.',
+/* --- Transport ------------------------------------------------ */
+'▶ Transport & Makros':'▶ Transport & macros',
+'Energy = Dichte/Drive · Complexity = Harmonik/Chromatik':'Energy = density/drive · complexity = harmony/chromaticism',
+'∞ Infinite':'∞ Infinite','● INFINITY OFF':'● INFINITY OFF','● INFINITY ON':'● INFINITY ON',
+'Mutation / Loop %':'Mutation / loop %',
+'Bei jedem Loop-Durchlauf mutieren nicht gesperrte Takte. Gesperrte Lanes und Takte bleiben eingefroren.':
+ 'Unlocked bars mutate on every loop pass. Locked lanes and bars stay frozen.',
+/* --- Blues-Werkstatt ------------------------------------------ */
+'🎸 Blues-Werkstatt':'🎸 Blues workshop',
+'Form & Turnaround · Transposition · Groove · Tempofelder · Chorus-Dynamik':
+ 'Form & turnaround · transposition · groove · tempo fields · chorus dynamics',
+'Tonart':'Key','Form':'Form','Zieltonart':'Target key',
+'Turnaround (Takt 11–12)':'Turnaround (bars 11–12)',
+'ohne (I bleibt stehen)':'none (I stays)',
+'V7 (Standard)':'V7 (standard)',
+'VI7 → V7 (Jazz)':'VI7 → V7 (jazz)',
+'bVI7 → V7 (chromatisch)':'bVI7 → V7 (chromatic)',
+'12-Bar Slow (9er-Voicings)':'12-bar slow (9th voicings)',
+'Jazz-Blues (12)':'Jazz blues (12)','Minor-Blues (12)':'Minor blues (12)',
+'8-Bar Blues':'8-bar blues','16-Bar Slow Blues':'16-bar slow blues','12-Bar Standard':'12-bar standard',
+'○ Quick-Change':'○ Quick change','● Quick-Change':'● Quick change',
+'Takt 2 wird zur IV-Stufe – der Klassiker gegen den 4-Takte-Leerlauf am Anfang':
+ 'Bar 2 becomes the IV chord — the classic cure for four idle bars at the start',
+'Progression bauen':'Build progression',
+'Schreibt die Form in die Akkordzeile und übernimmt sie sofort.':'Writes the form into the chord line and applies it immediately.',
+'− Halbton':'− semitone','+ Halbton':'+ semitone','→ transponieren':'→ transpose',
+'↻ Übungs-Zirkel weiter':'↻ Next practice key',
+'G → C → F → Bb → Eb → A → D → E – die Tonarten, die man als Gitarrist sonst nie übt':
+ 'G → C → F → Bb → Eb → A → D → E — the keys guitarists otherwise never practise',
+'Transponiert die komplette Progression samt Suffixen und zieht die Tonart der Harmonie-Engine mit. Locks bleiben erhalten.':
+ 'Transposes the whole progression including suffixes and pulls the harmony engine key along. Locks are preserved.',
+'● Groove-Kopplung':'● Groove link','○ Groove-Kopplung':'○ Groove link',
+'DRUMS, BASS und CHORDS ziehen zwingend denselben Swing-Wert':'DRUMS, BASS and CHORDS are forced onto the same swing value',
+'Backbeat 2 & 4':'Backbeat 2 & 4',
+'● Turnaround-Fill':'● Turnaround fill','○ Turnaround-Fill':'○ Turnaround fill',
+'Erzwingt einen Fill im letzten Takt der Form':'Forces a fill in the last bar of the form',
+'Swing und Velocity-Streuung stehen pro Lane weiter unten. Bei aktiver Kopplung folgen Drums, Bass und Chords dem globalen Swing-Regler.':
+ 'Swing and velocity spread are per lane, further down. While the link is active, drums, bass and chords follow the global swing slider.',
+'Tempofelder – ein Klick setzt Styles, Swing und Tempo. Jeder weitere Klick geht 5 BPM weiter durch den Bereich.':
+ 'Tempo fields — one click sets styles, swing and tempo. Each further click steps 5 BPM through the range.',
+'Slow Blues 12/8':'Slow blues 12/8','Rock-Blues gerade':'Rock blues straight','Funk-Blues':'Funk blues',
+'○ Chorus-Dynamik':'○ Chorus dynamics','● Chorus-Dynamik':'● Chorus dynamics',
+'Baut die Dynamik über mehrere Durchläufe auf und wieder ab':'Builds the dynamics up and back down across several passes',
+'Bogen über':'Arc across','Ride ab Chorus':'Ride from chorus','nie':'never',
+'2 Chorusse':'2 choruses','3 Chorusse':'3 choruses','4 Chorusse':'4 choruses',
+'6 Chorusse':'6 choruses','8 Chorusse':'8 choruses',
+'Velocity-Hub':'Velocity range','Aus.':'Off.',
+/* --- DAW Sync -------------------------------------------------- */
+'MMC = Transport (Play/Rec) · MIDI Clock nur für Hardware, NICHT für Cubase':
+ 'MMC = transport (play/rec) · MIDI Clock for hardware only, NOT for Cubase',
+'● CLOCK OFF':'● CLOCK OFF','● CLOCK ON':'● CLOCK ON','● SLAVE OFF':'● SLAVE OFF','✓ SLAVE AN':'✓ SLAVE ON',
+'Clock-Eingang':'Clock input','— kein Eingang —':'— no input —',
+'Sync-Ausgang':'Sync output','= Haupt-Output':'= main output',
+'Transportbefehl':'Transport command','Start (von vorn)':'Start (from top)','Continue (ab Cursor)':'Continue (from cursor)',
+'Cubase bei PLAY':'Cubase on PLAY','nichts senden':'send nothing',
+'Count-In':'Count-in','ohne':'none','1 Takt':'1 bar','2 Takte':'2 bars','4 Takte':'4 bars',
+'Bei STOP':'On STOP','Cubase mitstoppen':'stop Cubase too','weiterlaufen lassen':'let it keep running',
+'⏱ Clock-Burst (4 Takte)':'⏱ Clock burst (4 bars)',
+'Sendet MIDI Clock (F8) im aktuellen Tempo plus Start/Stop. Cubase kann MIDI Clock nicht empfangen – nur für Hardware.':
+ 'Sends MIDI Clock (F8) at the current tempo plus start/stop. Cubase cannot receive MIDI Clock — hardware only.',
+'Der Generator folgt der MIDI Clock einer DAW oder Hardware. Tempo, Start, Stop und Position kommen dann von dort.':
+ 'The generator follows the MIDI Clock of a DAW or hardware. Tempo, start, stop and position then come from there.',
+'Nur für Hardware-Sequencer/Drumcomputer. Cubase ignoriert MIDI Clock.':
+ 'For hardware sequencers and drum machines only. Cubase ignores MIDI Clock.',
+'Slave aus.':'Slave off.',
+/* --- Progression ----------------------------------------------- */
+'Klick auf einen Takt = Lock (🔒) gegen Mutation':'Click a bar = lock (🔒) against mutation',
+'Preset':'Preset','— wählen —':'— choose —',
+'12-Bar Blues in A':'12-bar blues in A','Quick-Change Blues in C':'Quick-change blues in C',
+'Rhythm Changes A (2 Tkt/Akk)':'Rhythm changes A (2 bars/chord)',
+'Coltrane Changes (kurz)':'Coltrane changes (short)',
+'Bars / Chord':'Bars / chord','Default Type':'Default type',
+'✖ Leeren':'✖ Clear',
+'Progression komplett leeren – Locks und Mutationen werden zurückgesetzt':
+ 'Clear the progression completely — locks and mutations are reset',
+'| Beispiel:':'| Example:',
+/* --- Harmonie-Engine -------------------------------------------- */
+'🎓 Harmonie-Engine':'🎓 Harmony engine',
+'Quintenzirkel · Stufen · Vorschläge · Reharmonisierung':'Circle of fifths · degrees · suggestions · reharmonisation',
+'Modus':'Mode',
+'Ionisch (Dur)':'Ionian (major)','Äolisch (Moll)':'Aeolian (minor)','Dorisch':'Dorian',
+'Mixolydisch':'Mixolydian','Lydisch':'Lydian','Phrygisch':'Phrygian','Harmonisch Moll':'Harmonic minor',
+'🔍 Tonart erkennen':'🔍 Detect key','Leitereigen:':'Diatonic:',
+'Stufen anhängen':'Append degrees','— Klick hängt den Akkord hinten an':'— a click appends the chord at the end',
+'● Septakkorde':'● Seventh chords','○ Septakkorde':'○ Seventh chords','aus = Dreiklänge':'off = triads',
+'💡 Nächster Akkord':'💡 Next chord',
+'— gewichtet nach Funktionsharmonik, orange = chromatisch':'— weighted by functional harmony, orange = chromatic',
+'chromatisch':'chromatic',
+'Reharmonisierung':'Reharmonisation','Tritonus-Sub':'Tritone sub','Sekundär-Dominanten':'Secondary dominants',
+'ii-V einfügen':'Insert ii-V','Durchgangs-Verminderte':'Passing diminished','↶ Undo':'↶ Undo',
+'Operationen arbeiten auf der aktuellen Progression und erhalten die Gesamt-Taktzahl.':
+ 'Operations work on the current progression and preserve the total bar count.',
+'Genre':'Genre','Länge':'Length',
+'8 Takte':'8 bars','12 Takte':'12 bars','16 Takte':'16 bars','32 Takte':'32 bars',
+'✦ Progression generieren':'✦ Generate progression',
+'Erzeugt eine neue Akkordfolge in der gewählten Tonart und schreibt sie ins Feld oben.':
+ 'Generates a new chord sequence in the chosen key and writes it into the field above.',
+/* --- Lanes ------------------------------------------------------ */
+'Jede Lane = eigener MIDI-Kanal = eigene Cubase-Spur':'Each lane = its own MIDI channel = its own DAW track',
+'Band-Preset (setzt alle Styles)':'Band preset (sets all styles)',
+'♫ Band laden':'♫ Load band','🎲 Alle Styles würfeln':'🎲 Randomise all styles',
+'✓ Tempo/Swing übernehmen':'✓ Adopt tempo/swing','● Tempo/Swing übernehmen':'● Adopt tempo/swing',
+'● Lane On/Off übernehmen':'● Adopt lane on/off','○ Lane On/Off übernehmen':'○ Adopt lane on/off',
+'Tempo und Swing des Presets mit übernehmen':'Adopt the preset tempo and swing as well',
+'Wenn aus, bleiben deine ON/OFF-Einstellungen der Lanes beim Laden eines Presets erhalten':
+ 'When off, your lane on/off settings survive loading a preset',
+'Presets setzen Style, Lane-On/Off und optional Tempo & Swing.':'Presets set style, lane on/off and optionally tempo & swing.',
+'Ballade':'Ballad','Modal / Vamp':'Modal / vamp',
+'○ OFF':'○ OFF','● ON':'● ON','◎ SOLO':'◎ SOLO','Nur diese Lane sendet':'Only this lane sends',
+'🔓 frei':'🔓 free','frei':'free','🔒 LOCKED':'🔒 LOCKED',
+'🎲 Reroll':'🎲 Reroll','🎮 Style würfeln':'🎮 Randomise style',
+'Kanal':'Channel','Oktave':'Octave','Velocity':'Velocity','Density %':'Density %',
+'Swing (gekoppelt)':'Swing (linked)','Swing':'Swing','Vel-Streuung ±':'Vel. spread ±',
+'Fill alle':'Fill every','aus':'off','Rate':'Rate','Gate %':'Gate %','Oktaven':'Octaves',
+'Drum-Kit (Program Change)':'Drum kit (program change)','Sound (Program Change)':'Sound (program change)',
+'— aus (Kit des Instruments) —':'— off (instrument keeps its kit) —',
+'— aus (Instrument behält seinen Sound) —':'— off (instrument keeps its sound) —',
+/* --- Style-Namen, soweit deutsch -------------------------------- */
+'Rock 8tel':'Rock 8ths','Rock 16tel Hats':'Rock 16th hats','Pop (Kick auf 3+)':'Pop (kick on 3+)',
+'Punk / Fast 8tel':'Punk / fast 8ths','Ballade (Cross-Stick)':'Ballad (cross-stick)',
+'Train Beat 16tel':'Train beat 16ths','Funk 16tel Tight':'Funk 16ths tight',
+'Trap 32tel-Rolls':'Trap 32nd rolls','Amen Break (2 Takte)':'Amen break (2 bars)',
+'Halbe Noten':'Half notes','Arpeggio 8tel':'Arpeggio 8ths','Dezimen (Ballad)':'Tenths (ballad)',
+'Bebop Walk (chromatisch)':'Bebop walk (chromatic)','Driving 8tel':'Driving 8ths',
+'Metal 16tel Pedal':'Metal 16th pedal','Funk Slap 16tel':'Funk slap 16ths','Disco Oktaven':'Disco octaves',
+'Synthwave 16tel':'Synthwave 16ths','Trap 808 (lang, sparsam)':'Trap 808 (long, sparse)',
+'Gitarren-Strumming 16tel':'Guitar strumming 16ths','Pop Ganze + Halbe':'Pop whole + half notes',
+'Rock 8tel Power':'Rock 8th power','Funk 16tel':'Funk 16ths','Neo-Soul 16tel lose':'Neo-soul 16ths loose',
+'Tremolo 16tel':'Tremolo 16ths','Disco 16tel Stabs':'Disco 16th stabs','Synth-Puls 8tel':'Synth pulse 8ths',
+'Trance 16tel Gate':'Trance 16th gate','Up/Down (Ecken doppelt)':'Up/down (corners doubled)',
+'Pinky Up (Top-Ton)':'Pinky up (top note)','Staircase (3 vor, 1 zurück)':'Staircase (3 up, 1 back)',
+'Paare (2er-Gruppen)':'Pairs (groups of two)','Gebrochene Terzen':'Broken thirds',
+'Trance Oktav-Sprung':'Trance octave jump','Polyrhythmus 3:4':'Polyrhythm 3:4',
+'Pedal + Wechselton':'Pedal + alternating note','Gated 16tel Chord':'Gated 16th chord',
+'Random mit Lücken':'Random with gaps','Motif Engine (entwickelnd)':'Motif engine (developing)',
+'Sequenz (Motiv transponiert)':'Sequence (motif transposed)','Riff (1-Takt-Hook)':'Riff (one-bar hook)',
+'Akkordton-Linie':'Chord-tone line','Choral / Hymne':'Chorale / hymn','Pop Hook 16tel':'Pop hook 16ths',
+'EDM Lead (repetitiv)':'EDM lead (repetitive)','Latin Montuno-Linie':'Latin montuno line',
+'Country Root-Five + Walkup':'Country root-five + walkup','Swing Comping (rootless)':'Swing comping (rootless)',
+'Big-Band Hits (Anticipation)':'Big-band hits (anticipation)','Reggae Skank (Offbeat)':'Reggae skank (offbeat)',
+'Jazz Ride (Swing)':'Jazz ride (swing)','Jazz Up-Tempo + Comping':'Jazz up-tempo + comping',
+'Jazz Trio (Swing)':'Jazz trio (swing)',
+/* --- Optgroup-Beschriftungen ------------------------------------ */
+'Ruhig':'Calm','Elektronisch':'Electronic','Klassisch':'Classic','Muster':'Patterns',
+'Entwicklung':'Development','Latin / Karibik':'Latin / Caribbean','Reggae / Karibik':'Reggae / Caribbean',
+/* --- Export, Keyboard ------------------------------------------- */
+'Type-1 SMF, eine Spur pro Lane':'Type-1 SMF, one track per lane',
+'Wiederholungen':'Repetitions','1x Progression':'1× progression',
+'Variation pro Durchlauf':'Variation per pass','aus (identisch)':'off (identical)','an (mutiert)':'on (mutated)',
+'Humanize im Export':'Humanize in export','nein (clean)':'no (clean)','ja':'yes',
+'⬇ .MID exportieren':'⬇ Export .MID',
+'Danach in Cubase per Drag & Drop ins Projekt ziehen.':'Then drag and drop it into your DAW project.',
+'= n Takte, Enter = Apply)':'= n bars, Enter = Apply)',
+'Akkorde (Leerzeichen-getrennt,':'Chords (space separated,',
+'gesperrt (kein SysEx)':'blocked (no SysEx)','verfügbar':'available',
+'Clock aus.':'Clock off.',
+'BUILD 2026-07-31-L · Zweisprachig DE/EN · Blues-Werkstatt':'BUILD 2026-07-31-L · bilingual DE/EN · blues workshop',
+'Farbe = Lane':'Colour = lane','⬇ Diese Seite speichern':'⬇ Save this page'
+};
+
+/* Log-Meldungen laufen alle durch log(); deshalb wird hier zentral übersetzt
+   statt an 75 Aufrufstellen. Reihenfolge zählt: erste Regel gewinnt. */
+var I18N_LOG=[
+ [/^MIDI PERFECT 2 bereit · SPACE = Play\/Stop · R = Reroll · D = Styles würfeln$/,'MIDI PERFECT 2 ready · SPACE = play/stop · R = reroll · D = randomise styles'],
+ [/^Blues-Werkstatt aktiv · Groove-Kopplung an · Backbeat (\d+) · Turnaround-Fill an$/,'Blues workshop active · groove link on · backbeat $1 · turnaround fill on'],
+ [/^Styles gesamt: (.*?) · Drum-Patterns: (\d+) · Band-Presets: (\d+)$/,'Styles total: $1 · drum patterns: $2 · band presets: $3'],
+ [/^Lane-Werkseinstellung geladen: (.*)$/,'Lane factory settings loaded: $1'],
+ [/^Lane-Zustand aus letzter Sitzung wiederhergestellt: (.*)$/,'Lane state restored from the last session: $1'],
+ [/^Progression: (\d+) Takte · (.*)$/,'Progression: $1 bars · $2'],
+ [/^Unbekannt: (.*)$/,'Unknown: $1'],
+ [/^Keine MIDI-Outputs – IAC-Treiber aktivieren!$/,'No MIDI outputs — enable the IAC driver!'],
+ [/^MIDI-Zugriff erteilt \(inkl\. SysEx\/MMC\)$/,'MIDI access granted (incl. SysEx/MMC)'],
+ [/^MIDI-Zugriff erteilt \(ohne SysEx – MMC gesperrt\)$/,'MIDI access granted (without SysEx — MMC blocked)'],
+ [/^MIDI bereit: (.*)$/,'MIDI ready: $1'],
+ [/^Reroll: alle nicht gesperrten Lanes \((\d+)\)$/,'Reroll: every unlocked lane ($1)'],
+ [/^Reroll: (\w+) \((\d+)\)$/,'Reroll: $1 ($2)'],
+ [/^SOLO: nur (\w+) &rarr; Ch(\d+) · alles andere sendet nichts$/,'SOLO: only $1 &rarr; Ch$2 · nothing else sends'],
+ [/^Solo aufgehoben – alle Lanes an$/,'Solo cleared — all lanes on'],
+ [/^(\w+) Style: (.*)$/,'$1 style: $2'],
+ [/^(\w+) Sound: aus$/,'$1 sound: off'],
+ [/^(\w+) Sound: (.*)$/,'$1 sound: $2'],
+ [/^(\w+) Swing: global \((\d+) %\)$/,'$1 swing: global ($2 %)'],
+ [/^(\w+) Swing: (\d+) %$/,'$1 swing: $2 %'],
+ [/^(\w+) AN → Ch(\d+)$/,'$1 ON → Ch$2'],
+ [/^(\w+) aus$/,'$1 off'],
+ [/^Transponiert nach (.*) \(([+-]?\d+) Halbtöne\)$/,'Transposed to $1 ($2 semitones)'],
+ [/^Blues-Form: (.*?) in (.*?)( \+ Quick-Change)? · Turnaround: (.*)$/,'Blues form: $1 in $2$3 · turnaround: $4'],
+ [/^Tempofeld (.*?): (\d+) BPM \(Bereich (.*?)\) · Swing (\d+) % · Backbeat (\d+)$/,'Tempo field $1: $2 BPM (range $3) · swing $4 % · backbeat $5'],
+ [/^Chorus-Dynamik AN – Bogen über (\d+) Durchläufe, Ride ab Chorus (\d+), Expression CC(\d+)$/,'Chorus dynamics ON — arc across $1 passes, ride from chorus $2, expression CC$3'],
+ [/^Chorus-Dynamik AUS$/,'Chorus dynamics OFF'],
+ [/^Turnaround-Fill an – letzter Takt der Form bekommt immer einen Fill$/,'Turnaround fill on — the last bar of the form always gets a fill'],
+ [/^Turnaround-Fill aus$/,'Turnaround fill off'],
+ [/^Groove-Kopplung AN – DRUMS, BASS und CHORDS ziehen denselben Swing \((\d+) %\)$/,'Groove link ON — DRUMS, BASS and CHORDS share the same swing ($1 %)'],
+ [/^Groove-Kopplung AUS – jede Lane schwingt für sich\. Bass und Drums nur bewusst auseinanderziehen\.$/,'Groove link OFF — every lane swings on its own. Only pull bass and drums apart deliberately.'],
+ [/^Kanalsperre AN – es geht nur noch auf (.*?) etwas raus$/,'Channel lock ON — only $1 can send now'],
+ [/^Kanalsperre AUS$/,'Channel lock OFF'],
+ [/^GM-Sounds gesetzt: (.*)$/,'GM sounds set: $1'],
+ [/^Sound-Zuweisung abgeschaltet(.*)$/,'Sound assignment disabled$1'],
+ [/^Alle Lanes auf Kanal (\d+)$/,'All lanes to channel $1'],
+ [/^Kanäle ab Ch(\d+) verteilt: (.*?) · DRUMS bleibt auf Ch 10$/,'Channels spread from Ch$1: $2 · DRUMS stays on Ch 10'],
+ [/^Band-Presets schalten Lanes ein\/aus$/,'Band presets switch lanes on and off'],
+ [/^Band-Presets lassen deine Lane-Schaltung in Ruhe$/,'Band presets leave your lane switching alone'],
+ [/^Count-In: (\d+) Takt\(e\) Vorlauf – Cubase läuft, Noten folgen danach\.$/,'Count-in: $1 bar(s) lead — Cubase rolls, notes follow.'],
+ [/^SLAVE: Transport steht bereit und wartet auf das Start-Signal der DAW\.$/,'SLAVE: transport is armed and waiting for the DAW start signal.'],
+ [/^Zeitbasis resynchronisiert \(Clock-Slave\)$/,'Time base resynchronised (clock slave)'],
+ [/^Bereits in (.*)$/,'Already in $1'],
+ [/^Progression steht bereits in (.*)$/,'The progression is already in $1'],
+ [/^Keine Progression zum Transponieren$/,'No progression to transpose'],
+ [/^Fertig$/,'Done'],
+ [/^Takte:? (\d+)/,'Bars: $1']
+];
+function trLog(m){
+  if(LANG!=='en')return m;
+  for(var i=0;i<I18N_LOG.length;i++){
+    if(I18N_LOG[i][0].test(m))return m.replace(I18N_LOG[i][0],I18N_LOG[i][1]);
+  }
+  return m;
+}
+
+/* Gemusterte Beschriftungen, die sich nicht als feste Liste lohnen. */
+var I18N_PAT=[
+ [/^Kanal (\d+)$/,'Channel $1'],
+ [/^(\d+) Takte$/,'$1 bars'],
+ [/^(\d+) Chorusse$/,'$1 choruses'],
+ [/^Bar (\d+)$/,'Bar $1'],
+ [/^Bar (\d+)-(\d+)$/,'Bars $1-$2'],
+ [/^Test &rarr; Ch (\d+)$/,'Test &rarr; Ch $1'],
+ [/^Style \((\d+)\)$/,'Style ($1)'],
+ [/^global \((\d+) %\)$/,'global ($1 %)'],
+ [/^(\w+) · Klick = an\/aus · Shift\+Klick = Solo · Taste (\d+)$/,'$1 · click = on/off · Shift+click = solo · key $2'],
+ [/^Clock aus\. · MMC: verfügbar · Cubase bei PLAY: (.*)$/,'Clock off. · MMC: available · Cubase on PLAY: $1'],
+ [/^Clock aus\. · MMC: gesperrt \(kein SysEx\) · Cubase bei PLAY: (.*)$/,'Clock off. · MMC: blocked (no SysEx) · Cubase on PLAY: $1'],
+ [/^Clock AN · (\d+) BPM · Port: (.*?) · MMC: verfügbar · Cubase bei PLAY: (.*)$/,'Clock ON · $1 BPM · port: $2 · MMC: available · Cubase on PLAY: $3'],
+ [/^Clock AN · (\d+) BPM · Port: (.*?) · MMC: gesperrt \(kein SysEx\) · Cubase bei PLAY: (.*)$/,'Clock ON · $1 BPM · port: $2 · MMC: blocked (no SysEx) · Cubase on PLAY: $3'],
+ [/^SLAVE = (.*?) · wartet auf Start · (.*)$/,'SLAVE = $1 · waiting for start · $2'],
+ [/^SLAVE = (.*)$/,'SLAVE = $1']
+];
+function trText(t){
+  if(LANG!=='en')return t;
+  if(I18N[t])return I18N[t];
+  for(var i=0;i<I18N_PAT.length;i++)if(I18N_PAT[i][0].test(t))return t.replace(I18N_PAT[i][0],I18N_PAT[i][1]);
+  return t;
+}
+function i18nNode(root){
+  var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null,false),n;
+  while(n=w.nextNode()){
+    var pn=n.parentNode&&n.parentNode.nodeName;
+    if(pn==='SCRIPT'||pn==='STYLE')continue;
+    if(n.__de===undefined)n.__de=n.nodeValue;
+    var raw=n.__de, t=raw.trim();
+    if(!t){continue;}
+    /* Bereits geschriebene Log-Zeilen laufen durch dieselben Regeln wie neue,
+       sonst steht die Historie nach dem Umschalten zweisprachig da. */
+    var inLog=false, p=n.parentNode;
+    while(p&&p!==document.body){ if(p.id==='log'||p.id==='mlog'){inLog=true;break;} p=p.parentNode; }
+    var tr=inLog?(LANG==='en'?trLog(t):t):trText(t);
+    var want=(tr===t)?raw:raw.slice(0,raw.indexOf(t))+tr+raw.slice(raw.indexOf(t)+t.length);
+    if(n.nodeValue!==want)n.nodeValue=want;
+  }
+  var all=(root.querySelectorAll?root.querySelectorAll('[title],[placeholder],optgroup'):[]);
+  for(var i=0;i<all.length;i++){
+    var e=all[i];
+    if(e.hasAttribute('title')){
+      if(e.__dtitle===undefined)e.__dtitle=e.getAttribute('title');
+      e.setAttribute('title',trText(e.__dtitle));
+    }
+    if(e.hasAttribute('placeholder')){
+      if(e.__dph===undefined)e.__dph=e.getAttribute('placeholder');
+      e.setAttribute('placeholder',trText(e.__dph));
+    }
+    if(e.nodeName==='OPTGROUP'){
+      if(e.__dlabel===undefined)e.__dlabel=e.getAttribute('label');
+      e.setAttribute('label',trText(e.__dlabel));
+    }
+  }
+}
+function applyLang(){
+  if(i18nBusy)return;
+  i18nBusy=true;
+  try{
+    for(var id in I18N_HTML){
+      var el=document.getElementById(id); if(!el)continue;
+      if(el.__dhtml===undefined)el.__dhtml=el.innerHTML;
+      var want=(LANG==='en')?I18N_HTML[id]:el.__dhtml;
+      if(el.innerHTML!==want)el.innerHTML=want;
+    }
+    i18nNode(document.body);
+    document.documentElement.lang=LANG;
+    var b=document.getElementById('langTgl');
+    if(b)b.innerHTML=(LANG==='en')?'<b>EN</b> · DE':'<b>DE</b> · EN';
+  }finally{ i18nBusy=false; }
+}
+function setLang(l){
+  LANG=(l==='en')?'en':'de';
+  try{localStorage.setItem(LS_LANG,LANG);}catch(e){}
+  applyLang();
+}
+function initI18n(){
+  applyLang();
+  /* Dynamisch nachgebaute Bereiche (Lanes, Style-Listen, Takt-Blöcke, Presets)
+     laufen ohne Zutun der Baufunktionen mit. */
+  i18nObs=new MutationObserver(function(muts){
+    if(i18nBusy||LANG!=='en')return;
+    i18nBusy=true;
+    try{
+      for(var i=0;i<muts.length;i++){
+        var ns=muts[i].addedNodes;
+        for(var j=0;j<ns.length;j++){
+          if(ns[j].nodeType===1)i18nNode(ns[j]);
+          else if(ns[j].nodeType===3){
+            var n=ns[j];
+            if(n.__de===undefined)n.__de=n.nodeValue;
+            var t=n.__de.trim(); if(!t)continue;
+            var tr=trText(t); if(tr!==t)n.nodeValue=n.__de.replace(t,tr);
+          }
+        }
+      }
+    }finally{ i18nBusy=false; }
+  });
+  i18nObs.observe(document.body,{childList:true,subtree:true});
+}
+
 /* ============================================================
    0 · KONSTANTEN / UTILS
    ============================================================ */
@@ -1978,7 +2352,7 @@ function reroll(laneId){
    6 · WEB MIDI
    ============================================================ */
 var midiAccess=null,midiOutput=null;
-function log(msg,cls){var l=document.getElementById('log');if(!l)return;
+function log(msg,cls){var l=document.getElementById('log');if(!l)return;msg=trLog(msg);
   l.innerHTML+='<span class="'+(cls||'i')+'">'+msg+'</span><br>';l.scrollTop=l.scrollHeight;}
 function setStatus(s,m){document.getElementById('midiStatus').textContent=m;
   document.getElementById('midiDot').className='dot '+(s==='ok'?'g':s==='err'?'r':'y');}
@@ -3469,5 +3843,7 @@ log('Blues-Werkstatt aktiv · Groove-Kopplung an · Backbeat 10 · Turnaround-Fi
 log('MIDI PERFECT 2 bereit · SPACE = Play/Stop · R = Reroll · D = Styles würfeln','ok');
 log('Styles gesamt: '+LANES.map(function(L){return L.name+' '+LANE_STYLES[L.id].length;}).join(' · ')+
     ' · Drum-Patterns: '+LANE_STYLES.drums.length+' · Band-Presets: '+Object.keys(BANDS).length,'i');
+document.getElementById('langTgl').onclick=function(){ setLang(LANG==='en'?'de':'en'); };
+initI18n();
 </script>
 </body></html>

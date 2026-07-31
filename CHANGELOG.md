@@ -7,6 +7,58 @@ gar nicht geladen".
 
 ---
 
+## BUILD 2026-07-31-L — Zweisprachig DE/EN
+
+**Problem:** Die Oberfläche war komplett deutsch. Web MIDI und die
+Single-File-Ecke sind fast ausschließlich englischsprachig — die Doku nützt
+niemandem, der die Beschriftungen nicht lesen kann.
+
+**Der naheliegende Weg wäre der falsche gewesen.** Üblich ist, jedes Element im
+Markup mit `data-i18n="key"` zu versehen und alle Texte über eine Schlüsseltabelle
+aufzulösen. Das hätte hier rund 400 Attribute bedeutet — und jede Baufunktion
+(`buildLanes`, `buildPresets`, `buildBands`, `buildCDisp`, `buildTempoFields`,
+`renderChMap`) hätte zusätzlich angefasst werden müssen, weil sie ihr HTML als
+String zusammensetzen. Viel Fläche für Fehler, und jeder künftige neue Regler
+wäre eine weitere Stelle, die man vergessen kann.
+
+**Geändert**
+
+- **Wörterbuch auf Basis der deutschen Zeichenkette** statt über Schlüssel:
+  `I18N['Kanalsperre an = …'] = 'Channel lock on = …'`. Das Markup bleibt
+  unangetastet, kein einziges `data-i18n`.
+- **`applyLang()` läuft mit einem TreeWalker über alle Textknoten**, merkt sich
+  beim ersten Durchgang das deutsche Original am Knoten (`n.__de`) und setzt es
+  beim Zurückschalten wieder ein. Führende und abschließende Leerzeichen bleiben
+  erhalten, sonst zerfällt die Formatierung.
+- **Ein MutationObserver** übersetzt nachgebaute Bereiche automatisch. Damit
+  brauchte keine einzige Baufunktion angefasst zu werden, und neue UI-Teile sind
+  ohne Zutun abgedeckt. Re-Entrancy-Sperre (`i18nBusy`), weil das Ersetzen von
+  `innerHTML` den Observer sonst selbst wieder auslöst.
+- **Lange Hilfeblöcke am Stück** über `I18N_HTML` und die IDs `hintBlues`,
+  `hintSync`, `hintSuffix`. Textknotenweise übersetzt ergäben die vielen
+  `<b>`-Fragmente englische Wörter in deutscher Satzstellung.
+- **Log-Meldungen zentral** in `log()` über eine Regelliste mit
+  Platzhaltergruppen (`I18N_LOG`), statt an 75 Aufrufstellen. Beim Umschalten
+  läuft auch die bereits geschriebene Historie durch dieselben Regeln, sonst
+  stünde das Protokoll zweisprachig da.
+- **Gemusterte Beschriftungen** (`Kanal 7`, `4 Chorusse`, `global (58 %)`) über
+  `I18N_PAT` als Regex, statt 16 bzw. 5 Einzeleinträge zu pflegen.
+- Umschalter in der Kommandoleiste, Auswahl in `localStorage`. Die Sprache wird
+  **vor dem ersten `log()`-Aufruf** gelesen, damit auch die Startmeldungen in
+  der richtigen Sprache erscheinen.
+
+**Fehlt eine Übersetzung, bleibt der deutsche Text stehen.** Nichts kann brechen,
+es kann nur unübersetzt bleiben — bei 815 sichtbaren Strings die einzige
+vertretbare Auslegung.
+
+**Geprüft** mit einem Audit-Durchlauf, der im EN-Modus alle sichtbaren Textknoten,
+`option`-, `optgroup`- und `title`-Werte einsammelt und gegen ein deutsches
+Wortmuster prüft: **815 Strings, 0 unübersetzt.** Umschalten hin und zurück,
+Persistenz über Reload und die vollständige Regression der Blues-Werkstatt laufen
+unverändert durch.
+
+---
+
 ## BUILD 2026-07-31-K — Blues-Werkstatt: Groove-Engine und Form
 
 **Problem:** Die Seite erzeugte korrekte Patterns, aber keine Musik, zu der sich
