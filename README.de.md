@@ -38,7 +38,7 @@ USB-Stick.
 
 | Datei | Zweck |
 |---|---|
-| `MIDI-PERFECT-2.html` | Die komplette Anwendung. Eine Datei, ~221 KB. |
+| `MIDI-PERFECT-2.html` | Die komplette Anwendung. Eine Datei, ~224 KB. |
 | `CUBASE-SETUP.md` | Cubase-Einrichtung + die Fallstricke beim MIDI-Routing |
 | `ARCHITEKTUR.md` | Aufbau des Codes, Datenmodell, Erweiterungspunkte |
 | `CHANGELOG.md` | Build-Historie mit Begründung der Änderungen |
@@ -173,9 +173,20 @@ Rhythmusgruppe versehentlich auseinanderziehen.
 
 ### Chorus-Dynamik
 
-Über 2–8 Durchläufe baut sich der Track auf und fällt wieder zurück: Velocity
-steigt, die Hi-Hat wandert ab einem einstellbaren Chorus aufs Ride, im
-Spitzen-Chorus liegt die Glocke auf den Vierteln. Zusätzlich geht pro Chorus ein
+Über 2–8 Durchläufe baut sich der Track auf und fällt wieder zurück. Das ist ein
+**Arrangement, keine Lautstärkerampe** — jeder Durchlauf legt eine Schicht dazu:
+
+| Stufe | Drums | Bass | Chords |
+|---|---|---|---|
+| 0 | Kick/Snare, Hi-Hat nur auf den Vierteln, kein Crash | auf 1 und 3 | ein Akkord pro Takt |
+| 1 | Hi-Hat durchgehend | auf allen Vierteln | auf 1 und 3 |
+| 2 | volle Band, Crash und offene Hi-Hat | Achtel | durchgehend |
+| 3 | zusätzlich Ride und Glocke | Achtel | durchgehend |
+
+Die Auswahl läuft über die **Position im Takt** und die Notennummer, nicht über
+Style-Namen — der Bogen greift damit für alle 137 Patterns. Kick, Snare,
+Rimshot und Clap sind geschützt und werden nie ausgedünnt, sonst verliert der
+Take den Puls statt nur an Dichte. Die Velocity steigt zusätzlich mit. Zusätzlich geht pro Chorus ein
 **Expression-CC** (Nummer frei wählbar) auf alle Nicht-Drum-Kanäle — bei einer
 Hammond lässt sich dort eine Drawbar-CC eintragen, dann zieht die Orgel über den
 Bogen selbstständig auf.

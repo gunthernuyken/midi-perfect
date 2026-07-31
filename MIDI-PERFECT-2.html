@@ -248,7 +248,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
   <div class="row route" style="align-items:flex-end">
     <div class="field"><label>&nbsp;</label><span class="chip" id="blChorus" title="Baut die Dynamik über mehrere Durchläufe auf und wieder ab">&#9675; Chorus-Dynamik</span></div>
-    <div class="field"><label>&nbsp;</label><span class="chip on" id="blBuild" title="Dünn anfangen und schichtweise aufbauen statt nur lauter werden">&#9679; Arrangement-Bogen</span></div>
+    <div class="field"><label>&nbsp;</label><span class="chip on" id="blArc" title="Dünn anfangen und schichtweise aufbauen statt nur lauter werden">&#9679; Arrangement-Bogen</span></div>
     <div class="field"><label>Bogen über</label><select id="blChLen">
       <option value="2">2 Chorusse</option><option value="3">3 Chorusse</option>
       <option value="4" selected>4 Chorusse</option><option value="6">6 Chorusse</option>
@@ -3863,7 +3863,7 @@ document.getElementById('blChorus').onclick=function(){
   log(CHORUS.on?'Chorus-Dynamik AN – Bogen über '+CHORUS.len+' Durchläufe, Ride ab Chorus '+(CHORUS.ride+1)+
       ', Expression CC'+CHORUS.cc:'Chorus-Dynamik AUS','m');
 };
-document.getElementById('blBuild').onclick=function(){
+document.getElementById('blArc').onclick=function(){
   CHORUS.build=!CHORUS.build;
   this.classList.toggle('on',CHORUS.build);
   this.innerHTML=(CHORUS.build?'&#9679;':'&#9675;')+' Arrangement-Bogen';

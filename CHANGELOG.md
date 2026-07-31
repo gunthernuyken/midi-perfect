@@ -7,6 +7,58 @@ gar nicht geladen".
 
 ---
 
+## BUILD 2026-07-31-M — Arrangement-Bogen
+
+**Problem:** Beim Abhören eines Rock-Takes über mehrere Durchläufe fiel das
+Urteil eindeutig aus: *„Falls du zwischendurch die Pattern gewechselt hättest,
+könnte ich als Zuhörer sagen, wäre mir nicht aufgefallen. Der ganze Groove ist
+auch eher langweilig."*
+
+**Ursache:** Die Chorus-Dynamik aus Build K änderte pro Durchlauf nur zwei Dinge
+— die Velocity um wenige Schritte und ein Becken. Beides verschwindet im
+Bandkontext. Eine Lautstärkerampe ist kein Arrangement.
+
+**Geändert**
+
+- **`applyArrangement()`** dünnt den Take je nach Position im Bogen aus, statt
+  ihn nur leiser zu machen. Vier Stufen, unabhängig davon, über wie viele
+  Durchläufe der Bogen gespannt ist (`Math.floor(st*4/len)`):
+
+  | Stufe | Drums | Bass | Chords |
+  |---|---|---|---|
+  | 0 | Kick/Snare, Hi-Hat nur auf den Vierteln, kein Crash | auf 1 und 3 | ein Akkord pro Takt |
+  | 1 | Hi-Hat durchgehend | auf allen Vierteln | auf 1 und 3 |
+  | 2 | volle Band, Crash und offene Hi-Hat | Achtel | durchgehend |
+  | 3 | zusätzlich Ride und Glocke aus der Chorus-Dynamik | Achtel | durchgehend |
+
+- Die Auswahl läuft über die **Position im Takt** (`t % BAR`) und die
+  **Notennummer**, nicht über Style-Namen. Damit greift der Bogen für jedes der
+  137 Patterns, auch für künftige, ohne Pflegeaufwand.
+- Kick, Snare, Rimshot und Clap sind als Grundgerüst geschützt und werden nie
+  ausgedünnt — sonst verliert der Take den Puls statt nur an Dichte.
+- Chip **Arrangement-Bogen** in der Blues-Werkstatt, ab Werk an. Aus bedeutet:
+  Chorus-Dynamik verhält sich wie in Build K.
+
+**Messung** statt Gehör (12-Takt-Form, Rock-Blues, 120 BPM):
+
+| Stufe | Hi-Hat | Ride | Crash | Bass-Noten | Akkord-Anschläge |
+|---|---|---|---|---|---|
+| 0 | 42 | 0 | 0 | 24 | 12 |
+| 1 | 84 | 0 | 0 | 48 | 24 |
+| 2 | 0 | 84 | 3 | 96 | 88 |
+| 3 | 0 | 42 + Glocke | 3 | 96 | 88 |
+
+Faktor 7 zwischen Stufe 0 und 2 bei den Akkorden, Faktor 4 beim Bass. Das ist
+der Unterschied zwischen „ist mir nicht aufgefallen" und einem hörbaren Aufbau.
+
+**Nebenbei behoben:** Der neue Chip hatte zunächst die ID `blBuild` bekommen —
+die gehört bereits dem Button *Progression bauen*. `getElementById` liefert das
+erste Vorkommen, der Handler wäre also am falschen Element gelandet und hätte
+den Formgenerator lahmgelegt. Jetzt `blArc`. Lehre daraus: eine ID, die schon
+existiert, taugt auch nicht als Prüfmerkmal dafür, ob ein Deploy angekommen ist.
+
+---
+
 ## BUILD 2026-07-31-L — Zweisprachig DE/EN
 
 **Problem:** Die Oberfläche war komplett deutsch. Web MIDI und die

@@ -38,7 +38,7 @@ works in five years, needs nothing installed, and can be copied to a USB stick.
 
 | File | Purpose |
 |---|---|
-| `MIDI-PERFECT-2.html` | The complete application. One file, ~221 KB. |
+| `MIDI-PERFECT-2.html` | The complete application. One file, ~224 KB. |
 | `CUBASE-SETUP.md` | Cubase setup — and the MIDI routing traps that cost people afternoons |
 | `ARCHITEKTUR.md` | Code structure, data model, extension points *(German)* |
 | `CHANGELOG.md` | Build history with the reasoning behind each change *(German)* |
@@ -160,9 +160,21 @@ It is on by default; without it the rhythm section can drift apart by accident.
 
 ### Chorus dynamics
 
-Across 2–8 loop passes the track builds and falls back: velocity rises, the
-hi-hat moves to the ride from a configurable pass onward, and at the peak the
-bell lands on the quarter notes only. An **expression CC** (freely assignable
+Across 2–8 loop passes the track builds and falls back. This is an
+**arrangement**, not a volume ramp — each pass adds a layer:
+
+| Stage | Drums | Bass | Chords |
+|---|---|---|---|
+| 0 | kick/snare, hi-hat on quarters only, no crash | on 1 and 3 | one chord per bar |
+| 1 | hi-hat throughout | on all quarters | on 1 and 3 |
+| 2 | full kit, crash and open hi-hat | eighths | throughout |
+| 3 | plus ride and bell | eighths | throughout |
+
+Selection works on **note position within the bar** and on note number, not on
+style names, so the arc applies to all 137 patterns. Kick, snare, rimshot and
+clap are protected and never thinned — otherwise the take loses its pulse
+rather than just its density. Velocity rises across the arc as well, and the
+bell lands on the quarter notes only at the peak. An **expression CC** (freely assignable
 number) is sent per pass to all non-drum channels — point it at a drawbar CC and
 a Hammond emulation opens up over the arc by itself.
 
