@@ -150,7 +150,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
 <h1>&#127929; MIDI PERFECT 2</h1>
 <p class="sub">Multi-Lane Generator &middot; Drums + 137 Styles &middot; Band-Presets &middot; Infinity Mutation &middot; SMF Export &middot; MIDI Clock &amp; MMC &rarr; Cubase</p>
-<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-31-L &middot; Zweisprachig DE/EN &middot; Blues-Werkstatt</span></p>
+<p class="sub" style="margin-top:-6px"><span id="buildTag" style="color:#00d4ff;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid #00d4ff55;border-radius:5px;padding:2px 8px">BUILD 2026-07-31-M &middot; Arrangement-Bogen &middot; Zweisprachig DE/EN</span></p>
 
 <div class="grid">
 
@@ -248,6 +248,7 @@ input[type=range]{background:transparent;padding:4px 0;width:120px;accent-color:
 
   <div class="row route" style="align-items:flex-end">
     <div class="field"><label>&nbsp;</label><span class="chip" id="blChorus" title="Baut die Dynamik über mehrere Durchläufe auf und wieder ab">&#9675; Chorus-Dynamik</span></div>
+    <div class="field"><label>&nbsp;</label><span class="chip on" id="blBuild" title="Dünn anfangen und schichtweise aufbauen statt nur lauter werden">&#9679; Arrangement-Bogen</span></div>
     <div class="field"><label>Bogen über</label><select id="blChLen">
       <option value="2">2 Chorusse</option><option value="3">3 Chorusse</option>
       <option value="4" selected>4 Chorusse</option><option value="6">6 Chorusse</option>
@@ -645,7 +646,10 @@ var I18N={
 'Akkorde (Leerzeichen-getrennt,':'Chords (space separated,',
 'gesperrt (kein SysEx)':'blocked (no SysEx)','verfügbar':'available',
 'Clock aus.':'Clock off.',
-'BUILD 2026-07-31-L · Zweisprachig DE/EN · Blues-Werkstatt':'BUILD 2026-07-31-L · bilingual DE/EN · blues workshop',
+
+'● Arrangement-Bogen':'● Arrangement arc','○ Arrangement-Bogen':'○ Arrangement arc',
+'Dünn anfangen und schichtweise aufbauen statt nur lauter werden':'Start thin and add layers instead of merely getting louder',
+'BUILD 2026-07-31-M · Arrangement-Bogen · Zweisprachig DE/EN':'BUILD 2026-07-31-M · arrangement arc · bilingual DE/EN',
 'Farbe = Lane':'Colour = lane','⬇ Diese Seite speichern':'⬇ Save this page'
 };
 
@@ -2258,7 +2262,7 @@ function applyBackbeat(ev,L){
 /* Chorus-Dynamik: über CHORUS.len Durchläufe baut sich der Track auf und
    fällt danach wieder zurück. Ab der Hälfte des Bogens wandern die Hi-Hats
    auf das Ride, im Spitzen-Chorus kommt die Glocke dazu. */
-var CHORUS={on:false,len:4,ride:2,cc:11,amp:10};
+var CHORUS={on:false,len:4,ride:2,cc:11,amp:10,build:true};
 var gStageOverride=null;
 function chorusStage(){
   if(!CHORUS.on)return 0;
@@ -2267,6 +2271,45 @@ function chorusStage(){
   return ((s%n)+n)%n;
 }
 function chorusF(st){ return CHORUS.len>1?st/(CHORUS.len-1):0; }
+/* Arrangement-Bogen: der Chorus wird nicht nur lauter, sondern erst duenner
+   und dann dichter. Ohne das hoert ein Zuhoerer den Wechsel schlicht nicht —
+   eine reine Velocity-Rampe faellt im Bandkontext durch. Vier Stufen,
+   unabhaengig davon ueber wie viele Durchlaeufe der Bogen gespannt ist:
+     0  Grundgeruest  – Kick/Snare, Hi-Hat nur auf den Vierteln, Bass auf 1 und 3,
+                        ein Akkord pro Takt. Klingt bewusst nach Intro.
+     1  Achtel        – Hi-Hat durchgehend, Bass auf allen Vierteln, Akkorde 1 und 3
+     2  volle Band    – alles da, Crash und offene Hi-Hat kommen dazu
+     3  Spitze        – zusaetzlich Ride/Glocke aus der Chorus-Dynamik            */
+var ARR_ESS={35:1,36:1,37:1,38:1,39:1,40:1};
+function arrLevel(st){
+  var n=Math.max(1,CHORUS.len);
+  return Math.min(3,Math.floor(st*4/n));
+}
+function applyArrangement(ev,L,st){
+  if(!CHORUS.on||!CHORUS.build)return ev;
+  var lv=arrLevel(st);
+  if(lv>=2&&L.id!=='drums')return ev;
+  if(lv>=3)return ev;
+  var out=[];
+  for(var i=0;i<ev.length;i++){
+    var e=ev[i], rb=((e.t%BAR)+BAR)%BAR;
+    var onQ=(rb%Q)===0, on13=(rb===0||rb===2*Q), on1=(rb===0);
+    var keep=true;
+    if(L.id==='drums'){
+      if(e.m===DK.crash||e.m===DK.crash2||e.m===DK.splash||e.m===DK.hhO)keep=(lv>=2);
+      else if(e.m===DK.hhC||e.m===DK.ride||e.m===DK.bell)keep=(lv>=1)||onQ;
+      else if(!ARR_ESS[e.m])keep=(lv>=2);
+    }else if(L.id==='bass'){
+      keep=(lv>=1)?onQ:on13;
+    }else if(L.id==='chords'){
+      keep=(lv>=1)?on13:on1;
+    }else{
+      keep=(lv>=1)||onQ;
+    }
+    if(keep)out.push(e);
+  }
+  return out;
+}
 function applyChorus(ev,L,st){
   if(!CHORUS.on)return ev;
   var f=chorusF(st), dv=Math.round(-CHORUS.amp*0.5+CHORUS.amp*1.5*f);
@@ -2311,6 +2354,7 @@ function buildTake(includeAll){
     applySwing(ev,laneSwing(L));
     applyVelSpread(ev,L);
     applyBackbeat(ev,L);
+    ev=applyArrangement(ev,L,st);
     applyChorus(ev,L,st);
     ev.sort(function(a,b){return a.t-b.t;});
     take.lanes[L.id]=ev;
@@ -3818,6 +3862,14 @@ document.getElementById('blChorus').onclick=function(){
   reloadFromCurrent(); sendChorusCC();
   log(CHORUS.on?'Chorus-Dynamik AN – Bogen über '+CHORUS.len+' Durchläufe, Ride ab Chorus '+(CHORUS.ride+1)+
       ', Expression CC'+CHORUS.cc:'Chorus-Dynamik AUS','m');
+};
+document.getElementById('blBuild').onclick=function(){
+  CHORUS.build=!CHORUS.build;
+  this.classList.toggle('on',CHORUS.build);
+  this.innerHTML=(CHORUS.build?'&#9679;':'&#9675;')+' Arrangement-Bogen';
+  reloadFromCurrent();
+  log(CHORUS.build?'Arrangement-Bogen an – Stufe 0 nur Grundgerüst, dann schichtweise Aufbau'
+                  :'Arrangement-Bogen aus – Chorus-Dynamik ändert nur Lautstärke und Becken','m');
 };
 document.getElementById('blChLen').onchange=function(){
   CHORUS.len=parseInt(this.value,10)||4; reloadFromCurrent(); sendChorusCC();
