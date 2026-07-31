@@ -7,172 +7,77 @@ gar nicht geladen".
 
 ---
 
-## BUILD 2026-07-30-J — SLAVE + IAC als Werkseinstellung
+## BUILD 2026-07-31-K — Blues-Werkstatt: Groove-Engine und Form
 
-Beim ersten Start ohne gespeicherten Zustand schaltet die Seite **SLAVE
-selbstständig ein** und wählt den ersten IAC-Eingang (bevorzugt Bus 1). Das ist
-der Normalbetrieb mit einer DAW und soll keine zwei Klicks kosten.
+**Problem:** Die Seite erzeugte korrekte Patterns, aber keine Musik, zu der sich
+üben lässt. Vier konkrete Mängel:
 
-Findet sich kein IAC-Port, bleibt SLAVE aus und es steht eine Meldung im Log.
-
-Ein manuelles Ausschalten hat weiterhin Vorrang: sobald einmal etwas gespeichert
-ist, gilt der gespeicherte Zustand und die Werkseinstellung greift nicht mehr.
-Der `localStorage`-Schlüssel wurde deshalb auf `midiperfect2.sync.v2` gehoben —
-sonst hätte ein aus Build I stammender Eintrag mit `slave:false` die neue
-Voreinstellung dauerhaft blockiert.
-
----
-
-## BUILD 2026-07-30-I — DAW-Sync-Einstellungen bleiben erhalten
-
-Das ganze *DAW Sync*-Panel überlebt jetzt den Reload: Clock-Ausgang, SLAVE,
-Clock-Eingang, Sync-Ausgang, Transportbefehl, *Cubase bei PLAY*, MMC-Device,
-Count-In und *Bei STOP*.
-
-**MIDI-Ports werden über den Namen gespeichert, nicht über die ID.** Die ID
-vergibt der Browser pro Sitzung neu; der Name bleibt. Ist der gespeicherte Port
-beim nächsten Start nicht da, bleibt SLAVE aus und es steht eine Warnung im Log —
-lieber ehrlich stumm als heimlich am falschen Port hängen.
-
-Werkseinstellung von *Cubase bei PLAY* auf **Play** geändert (vorher
-*nichts senden*); das ist der Arbeitsmodus, nicht die Ausnahme.
-
----
-
-## BUILD 2026-07-30-H — Tempomessung und MMC im Slave-Modus
-
-Zwei Fehler, die erst im echten Betrieb mit Cubase auffielen.
-
-**1 · Tempo wurde etwa halb so hoch gemessen wie es war.**
-Bei 111 BPM Projekttempo zeigte die Slave-Statuszeile 61 BPM.
-
-Ursache: Chrome stellt MIDI-Realtime-Bytes gebündelt zu — mehrere `F8` im
-selben Eventloop-Durchlauf mit nahezu 0 ms Abstand, danach eine große Lücke.
-Die Tempomessung mittelte über Einzelabstände und musste die Nullabstände als
-Ausreißer wegfiltern; übrig blieben nur die Lücken, also ein zu großer
-Mittelwert und damit ein zu niedriges Tempo.
-
-Gefixt: Tempo kommt jetzt aus der **Gesamtspanne der letzten 96 Clocks geteilt
-durch deren Anzahl**. Das ist unabhängig davon, ob der Browser einzeln oder
-gebündelt zustellt. Verifiziert mit einem absichtlich bündelnden Testmaster
-(4 Clocks am Stück): vorher rund die Hälfte, jetzt 110 statt 111 BPM.
-
-Auf die Wiedergabeposition hatte der Fehler keinen Einfluss — die zählt
-Clock-Ticks und misst keine Zeit. Betroffen waren die Anzeige, der mitlaufende
-BPM-Regler und das Tempo im SMF-Export.
-
-**2 · Der große PLAY-Button startete Cubase nur beim ersten Mal.**
-
-Ursache: Build F unterdrückte im Slave-Modus pauschal *alle* MMC-Sendungen —
-gedacht als Rückkopplungsschutz, aber zu grob. MMC ist ein Befehlskanal, keine
-Clock. Genau die Kombination ist der sinnvolle Arbeitsablauf: PLAY im Generator
-startet Cubase per MMC, Cubase schickt daraufhin sein `FA`, beide laufen
-synchron los.
-
-Gefixt: MMC ist im Slave-Modus wieder aktiv. Der Rückkopplungsschutz sitzt jetzt
-präzise da, wo er hingehört — ein `ext.busy`-Flag während der Verarbeitung eines
-eingehenden `FA`/`FC`. Ein von Cubase kommendes Start oder Stop geht dadurch
-nicht als MMC an Cubase zurück. Der Clock-Ausgang bleibt im Slave-Modus
-weiterhin komplett gesperrt.
-
-Zusätzlich: Drückt man PLAY, während die DAW steht, zeigt die Statuszeile jetzt
-**„bereit – wartet auf DAW-Start"** statt scheinbar zu hängen.
-
-**Verifiziert** über drei Play/Stop-Zyklen gegen einen Fake-Cubase, der auf MMC
-reagiert: jedes Mal startet und stoppt der Transport auf beiden Seiten, Noten
-fließen in jeder Runde.
-
----
-
-## BUILD 2026-07-30-G — Clock-Slave: Zeitbasis-Fix
-
-**Problem:** Im Slave-Modus lief die Synchronisation sichtbar korrekt — Clocks
-wurden gezählt, das Tempo erkannt, der BPM-Regler folgte Cubase — aber es kam
-**keine einzige Note** in der DAW an. Nur während einer Tempoänderung war kurz
-etwas zu hören.
-
-**Ursache:** Zwei verschiedene Zeit-Epochen im selben Rechenweg.
-`extMessage` übernahm `e.timeStamp` des eingehenden MIDI-Events als
-`sched.msRef`, `schedTick` rechnete danach mit `performance.now()`. Wenn Chrome
-für MIDI-Events eine andere Epoche liefert als für `performance.now()`, wird
-
-```js
-curTick = sched.tickRef + (now - sched.msRef) / mpt
-```
-
-um Größenordnungen falsch. Der Lookahead-Horizont landet weit in der
-Vergangenheit, die Bedingung `ev[idx].t < horizon` trifft nie zu — und weil
-`tickRef` weiterhin sauber aus den Clock-Ticks kommt, sehen Taktzähler,
-BPM-Anzeige und Clock-Zähler völlig gesund aus. Die Anzeige lügt nicht, sie misst
-nur etwas anderes als der Scheduler.
-
-Das kurze Aufflackern bei Tempoänderungen kam von `extSpp`, das `msRef` auf
-`performance.now()` zurücksetzte — bis der nächste F8-Tick es wieder verstellte.
+1. **Swing war global.** Ein einziger Regler für alle fünf Lanes. Wer Drums
+   shufflen und den Bass gerade lassen wollte, konnte das — nur war das genau
+   die Einstellung, die man *nie* will. Umgekehrt gab es keine Möglichkeit,
+   eine einzelne Lane bewusst herauszunehmen.
+2. **Statische Velocity.** Die Generatoren setzten feste Anschlagswerte mit
+   kleinen Offsets. Die einzige Streuung kam aus `Humanize` und wurde erst
+   beim Senden aufgeschlagen — der SMF-Export klang also anders als die
+   Wiedergabe.
+3. **Takt 12 klang wie Takt 4.** Ohne Turnaround verschwimmt die Form. Nach
+   zehn Minuten hört man nur noch die Schleife, nicht mehr die Harmonik.
+4. **Kein Weg zur Transposition.** Progressionen mussten von Hand neu getippt
+   werden. Praktisch heißt das: man übt in A und E und in nichts sonst.
 
 **Geändert**
 
-- `extMessage` nimmt ausschließlich `performance.now()`. Die Handler-Latenz liegt
-  unter einer Millisekunde und ist irrelevant, weil das Tempo über 48 Clocks
-  gemittelt wird.
-- **Notbremse in `schedTick`:** liegt `now - msRef` außerhalb von 0…4000 ms,
-  wird die Zeitbasis resynchronisiert statt weitergerechnet, mit Log-Eintrag.
-- **Doppelter Loop-Wechsel entfernt.** `extClock` und `schedTick` hätten beide
-  `loopTicks` abgezogen — der Zeiger wäre einen kompletten Durchlauf zu weit
-  zurückgesprungen. Der Loop-Wechsel liegt jetzt allein bei `schedTick`.
+- **Swing pro Lane** (`L.swing`, `-1` = folgt global). Darüber liegt die
+  **Groove-Kopplung**: solange sie aktiv ist, ziehen DRUMS, BASS und CHORDS
+  zwingend den globalen Wert, ihre Auswahlfelder sind sichtbar gesperrt.
+  Auseinanderlaufende Rhythmusgruppe ist kein Feature, das man versehentlich
+  einschalten können sollte.
+- `applySwing` greift jetzt zusätzlich auf die 16tel-Offbeats und kürzt Noten,
+  die sonst in den verschobenen Offbeat hineinlaufen würden.
+  **Triolenraster bleibt unangetastet:** Patterns mit `grid:12`
+  (Blues Shuffle, Jazz Ride, Purdie) sind bereits triolisch notiert; ein
+  zweiter Shuffle darüber ergäbe Unsinn. Die Prüfung läuft über die Position
+  relativ zur Viertel (`t % Q`), nicht über den Style-Namen.
+- **Velocity-Streuung pro Lane** (`L.vspread`), **deterministisch aus dem
+  Lane-Seed** statt aus `Math.random()`. Damit klingt derselbe Seed
+  reproduzierbar gleich und der Export liefert exakt das Gehörte.
+- **Backbeat-Akzent auf 2 und 4.** Nicht als reine Addition: der Akzent
+  bekommt +60 % des Reglerwerts, alles andere −40 %. Reines Draufrechnen
+  lief bei Drum-Velocity 100 plus Pattern-Akzent in die 127er-Sättigung —
+  der Backbeat verschwand genau dann, wenn man ihn am deutlichsten wollte.
+- **Blues-Werkstatt** als neues Panel:
+  - **Formgenerator** stufenbasiert (Halbtonabstand + Akkordtyp), damit jede
+    Form in jeder Tonart verfügbar ist: 12-Bar Standard, 12-Bar Slow mit
+    9er-Voicings, Jazz-Blues, Minor-Blues, 8-Bar, 16-Bar.
+  - **Turnaround** für Takt 11–12: V7, VI7→V7, ii7→V7, #IV°7→V7, bVI7→V7.
+  - **Quick-Change** (Takt 2 wird zur IV-Stufe).
+  - **Turnaround-Fill** erzwingt einen Fill im letzten Takt der Form.
+  - **Transposition** ±Halbton, Zieltonart direkt, und ein Übungs-Zirkel
+    G → C → F → Bb → Eb → A → D → E. Dafür merkt sich `parseToken` jetzt das
+    rohe Suffix (`c.suf`), sonst ginge beim Umschreiben `m7b5` oder `7b9`
+    verloren. Tonartabhängige Vorzeichenwahl über eine Flat-Key-Menge.
+  - **Tempofelder** Slow Blues 12/8 (60–75, Swing 98), Shuffle (95–130,
+    Swing 65), Rock-Blues gerade (110–140, Swing 0), Funk-Blues (100–115,
+    Swing 16). Sie setzen Styles, Swing, Backbeat und Tempo; jeder weitere
+    Klick geht 5 BPM weiter durch den Bereich. Sie schalten außerdem MELODY
+    und ARP ab — die Melodie spielt der Mensch, und programmierte
+    Rhythmusgitarre verrät sich ohnehin sofort.
+  - **Chorus-Dynamik:** Bogen über 2–8 Durchläufe. Velocity steigt, die
+    Hi-Hat wandert ab einem einstellbaren Chorus aufs Ride, im Spitzen-Chorus
+    liegt die Glocke **nur auf den Vierteln** — eine durchgehende Ride-Bell
+    auf allen Achteln ist kein Drummer. Pro Chorus geht ein Expression-CC
+    (Nummer frei wählbar) auf alle Nicht-Drum-Kanäle.
 
-**Regressionstest** mit absichtlich verschobener Event-Epoche (+1,78·10¹²):
-vorher 0 Noten, nachher durchgehende Wiedergabe über mehrere Loop-Grenzen
-(48 → 98 → 150 Noten), Loop-Zähler und Taktanzeige laufen mit, null Rückläufer
-auf den Bus.
+**Architektur:** Alle vier Bearbeitungsschritte (Swing, Streuung, Backbeat,
+Chorus) hängen in `buildTake()` hinter dem Generator und **werden in den Take
+gebacken**. Wiedergabe und SMF-Export durchlaufen damit dieselbe Kette. Der
+Chorus-Bogen läuft im Export über die Wiederholungen mit (`gStageOverride`).
 
----
-
-## BUILD 2026-07-30-F — MIDI-Clock-Slave
-
-**Problem:** Tempo-Sync mit Cubase funktionierte in keiner Konfiguration.
-
-**Ursache:** Cubase kann sich nicht auf eingehende MIDI Clock synchronisieren.
-Als Timecode-Quelle akzeptiert es nur Interner Timecode, MIDI-Timecode,
-ASIO-Positioning und VST System Link. Der „Tempo-Handshake" konnte prinzipiell
-nie wirken. Der Hilfetext im Panel („Timecode-Quelle MIDI Timecode/MIDI Clock")
-war schlicht falsch.
-
-**Geändert — Rollen umgedreht.** Die DAW hält die Zeit, der Generator folgt:
-
-- **Clock-Slave-Modus** (Abschnitt 7c). Wertet F8 (Clock), FA (Start),
-  FB (Continue), FC (Stop) und F2 (Songposition) eines wählbaren MIDI-Eingangs
-  aus. Cubases Transport startet und stoppt damit den Generator, Tempoänderungen
-  greifen im laufenden Takt, der BPM-Regler folgt sichtbar.
-- **Zwei Zeitquellen.** Im Slave-Modus schreibt `schedTick` `tickRef`/`msRef`
-  nicht mehr fort, sondern interpoliert nur für den Lookahead-Horizont; die
-  Position kommt ausschließlich aus den Clock-Ticks. Die gesamte
-  Nachfolgelogik bleibt unverändert — rund 80 Zeilen statt Sequencer-Umbau.
-- **Rückkopplungsschutz.** Solange Slave aktiv ist, geben `clockStart`,
-  `clockStop`, `pumpClock`, `cubaseStart` und `cubaseStopCmd` sofort zurück.
-  Generator und DAW hängen am selben IAC-Bus; sonst sendet der Generator die
-  Clock, der er folgt, selbst wieder aus.
-- Tempoerkennung über das gleitende Mittel der letzten 48 Clock-Abstände,
-  mit Ausreißerfilter (nur 1,5–400 ms) und Abriss-Erkennung nach 900 ms.
-- MIDI-Eingänge werden jetzt mit enumeriert (`populateInputs`).
-
-**Verifiziert** mit simuliertem Clock-Master: externer Start erkannt,
-Tempowechsel 120→160 nachgezogen, externer Stop greift, null Clock-Bytes und
-null SysEx gehen zurück nach draußen.
-
----
-
-## BUILD 2026-07-30-E — Sync-Panel korrigiert
-
-- Panel heißt jetzt **DAW Sync** statt Cubase Sync.
-- Der falsche Setup-Hinweis ist ersetzt durch eine Warnung, dass Cubase MIDI
-  Clock nicht als Sync-Quelle annimmt.
-- „Tempo-Handshake" → **Clock-Burst**, gekennzeichnet als Hardware-Feature
-  (Drumcomputer, Groovebox, Looper).
-- Der MMC-Setup-Pfad ist auf die tatsächliche Dialogstruktur korrigiert:
-  Transport → Projekt-Synchronisationseinstellungen → **Gerätesteuerung** →
-  MMC-Slave aktiv. Dass dieser Haken standardmäßig **aus** ist, war der Grund,
-  warum Play/Record/Stop nichts bewirkten — der Generator hatte immer korrekt
-  gesendet (`F0 7F 7F 06 02 F7` usw., headless verifiziert).
+**Getestet** headless über Playwright gegen die Datei: Formgenerator in allen
+Tonarten, Transposition mit Suffix-Erhalt, Swing-Verschiebung und Nicht-
+Verschiebung auf Triolenraster, Kopplungslogik, Determinismus der
+Velocity-Streuung, Backbeat ohne Sättigung, alle Chorus-Stufen, Tempofelder,
+Turnaround-Fill, SMF-Export. Keine Konsolenfehler.
 
 ---
 

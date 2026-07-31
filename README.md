@@ -8,8 +8,6 @@ entwickelt und getestet gegen **Cubase Pro 14** auf macOS über den IAC-Treiber.
 Browser (Web MIDI)  ──IAC-Treiber Bus 1──▶  Cubase  ──▶  HALion Sonic / Groove Agent
 ```
 
-![MIDI PERFECT 2 — Oberfläche](screenshot.png)
-
 Fünf unabhängige Lanes (DRUMS, BASS, CHORDS, ARP, MELODY) erzeugen aus einer
 Akkordfolge deterministisch Patterns, senden sie auf getrennten MIDI-Kanälen und
 lassen sich live umschalten, würfeln und mutieren. Zusätzlich: MIDI Clock und MMC
@@ -21,11 +19,10 @@ für Transport-Sync, sowie SMF-Export (Type 1, eine Spur pro Lane).
 
 | Datei | Zweck |
 |---|---|
-| `MIDI-PERFECT-2.html` | Die komplette Anwendung. Eine Datei, ~157 KB. |
+| `MIDI-PERFECT-2.html` | Die komplette Anwendung. Eine Datei, ~193 KB. |
 | `CUBASE-SETUP.md` | Cubase-Einrichtung + die Fallstricke beim MIDI-Routing |
 | `ARCHITEKTUR.md` | Aufbau des Codes, Datenmodell, Erweiterungspunkte |
 | `CHANGELOG.md` | Build-Historie mit Begründung der Änderungen |
-| `screenshot.png` | Die Oberfläche bei 2560 px |
 
 ---
 
@@ -89,10 +86,11 @@ kann man beide dauerhaft zuklappen.
 |---|---|
 | MIDI Connection | Port, Kanal-Routing, GM-Sounds, Kanalsperre, MIDI-Monitor |
 | Transport & Makros | Play/Stop, BPM, Swing, Humanize, Energy, Complexity, Loop, Mutation |
-| DAW Sync | MMC Play/Record/Stop, Count-In, Clock-Ausgang, **Clock-Slave** |
+| Blues-Werkstatt | Formgenerator, Turnaround, Quick-Change, Transposition, Groove-Kopplung, Backbeat, Tempofelder, Chorus-Dynamik |
+| Cubase Sync | MIDI Clock, MMC Play/Record/Stop, Count-In, Tempo-Handshake |
 | Progression | Akkordfolge als Text oder Blöcke, Takt-Locks gegen Mutation |
 | Harmonie-Engine | Quintenzirkel, Stufen, Vorschläge, Reharmonisierung, Generator |
-| Lanes | Pro Lane: Style, Kanal, Sound, Oktave, Velocity, Density |
+| Lanes | Pro Lane: Style, Kanal, Sound, Oktave, Velocity, Density, Swing, Vel-Streuung |
 | MIDI Export | SMF Type 1, eine Spur pro Lane |
 | Keyboard | Live-Anzeige der klingenden Noten, eingefärbt nach Lane |
 
@@ -120,19 +118,63 @@ nicht hier; siehe [CUBASE-SETUP.md](CUBASE-SETUP.md).
 Der Lane-Zustand (an/aus, Kanal, Style, Sound, Oktave, Velocity, Density, Lock)
 wird in `localStorage` gespeichert und beim nächsten Öffnen wiederhergestellt.
 Der Button *Lane-Zustand zurücksetzen* verwirft ihn und lädt die Werkseinstellung.
-Dasselbe gilt für die eingeklappten Panels und für das komplette
-*DAW Sync*-Panel inklusive Slave-Modus und Portwahl. Beim allerersten Start
-schaltet die Seite **SLAVE selbst ein und wählt den ersten IAC-Eingang** —
-danach gilt, was du zuletzt eingestellt hast.
 
 ### Determinismus
 
 Die Generatoren sind **seed-basiert und deterministisch**: gleicher Seed, gleiche
-Akkordfolge, gleicher Takt → gleiches Pattern. Nur `Humanize` (Timing- und
-Velocity-Streuung) ist echt zufällig und wird erst beim Senden aufgeschlagen.
+Akkordfolge, gleicher Takt → gleiches Pattern. Auch die Velocity-Streuung der
+Groove-Engine wird aus dem Lane-Seed abgeleitet und ist damit reproduzierbar.
+Nur `Humanize` (Timing- und Velocity-Jitter) ist echt zufällig und wird erst beim
+Senden aufgeschlagen.
 
 Daraus folgt: Ein Pattern, das gefällt, lässt sich mit `Lock` einfrieren, während
 alles andere weiter mutiert.
+
+### Groove-Engine
+
+Zwischen Generator und Ausgabe liegen vier Bearbeitungsschritte, die in
+`buildTake()` **in den Take gebacken** werden — Wiedergabe und SMF-Export
+durchlaufen also dieselbe Kette und klingen identisch:
+
+1. **Swing**, pro Lane auflösbar. `100 %` = volles Triolen-Feel (der Offbeat
+   sitzt auf der dritten Triole). Blues-Shuffle liegt bei 62–68, Slow Blues 12/8
+   bei 95–100, Funk bei 12–20.
+   Patterns auf Triolenraster (`grid:12`) werden **nicht** zusätzlich
+   verschoben — sie sind bereits triolisch notiert. Die Erkennung läuft über die
+   Notenposition relativ zur Viertel, nicht über den Style-Namen.
+2. **Velocity-Streuung**, pro Lane, deterministisch aus dem Seed.
+3. **Backbeat-Akzent** auf 2 und 4. Der Akzent wird nicht nur addiert, sondern
+   alles andere gleichzeitig leicht abgesenkt — sonst läuft die Snare in die
+   127er-Sättigung und der Akzent verschwindet.
+4. **Chorus-Dynamik**, siehe unten.
+
+Die **Groove-Kopplung** (Blues-Werkstatt) zwingt DRUMS, BASS und CHORDS auf
+denselben Swing-Wert. Sie ist ab Werk an; ohne sie lässt sich die
+Rhythmusgruppe versehentlich auseinanderziehen.
+
+### Chorus-Dynamik
+
+Über 2–8 Durchläufe baut sich der Track auf und fällt wieder zurück: Velocity
+steigt, die Hi-Hat wandert ab einem einstellbaren Chorus aufs Ride, im
+Spitzen-Chorus liegt die Glocke auf den Vierteln. Zusätzlich geht pro Chorus ein
+**Expression-CC** (Nummer frei wählbar) auf alle Nicht-Drum-Kanäle — bei einer
+Hammond lässt sich dort eine Drawbar-CC eintragen, dann zieht die Orgel über den
+Bogen selbstständig auf.
+
+Der Bogen läuft auch im **Export** über die Wiederholungen mit.
+
+### Blues-Werkstatt
+
+Formen sind **stufenbasiert** hinterlegt (Halbtonabstand zur Tonika + Akkordtyp),
+nicht als Akkordnamen. Damit ist jede Form in jeder Tonart verfügbar:
+12-Bar Standard, 12-Bar Slow mit 9er-Voicings, Jazz-Blues, Minor-Blues, 8-Bar,
+16-Bar — kombinierbar mit Quick-Change und fünf Turnaround-Varianten für
+Takt 11–12.
+
+Die Transposition schreibt die Akkordzeile neu und erhält dabei die Suffixe
+(`m7b5`, `7b9`, `:2`) sowie die Tonart der Harmonie-Engine. Der Übungs-Zirkel
+geht bewusst über G, C, F, Bb, Eb, A, D, E — also auch durch die Tonarten, die
+man auf der Gitarre sonst umgeht.
 
 ### Infinity / Mutation
 
@@ -156,32 +198,6 @@ Bereits eingereihte Note-Offs behalten ihre Zeit, es bleibt also nichts hängen.
 
 MIDI Clock läuft im selben Tick-Raster (24 Clocks pro Viertel) aus derselben
 Zeitrechnung — dadurch driftet Cubase nicht gegen den Generator.
-
-### Transport-Sync mit der DAW
-
-Zwei Richtungen, und nur eine davon funktioniert mit Cubase in beide Richtungen:
-
-**MMC (Generator steuert Cubase).** Play, Record und Stop gehen als SysEx raus.
-Cubase muss dafür MMC-Slave aktiv haben. Braucht die SysEx-Freigabe des Browsers.
-
-**Clock-Slave (Cubase steuert den Generator) — die empfohlene Richtung.**
-Cubase sendet MIDI Clock, der Generator hängt sich dran: Start, Stop, Position und
-Tempo kommen aus der DAW, der BPM-Regler folgt sichtbar mit. Das ist auch
-architektonisch richtig — die DAW hält die Zeit.
-
-```
-Cubase  ──MIDI Clock (F8/FA/FB/FC/F2)──▶  IAC Bus  ──▶  MIDI PERFECT
-MIDI PERFECT  ──Noten──▶  IAC Bus  ──▶  Cubase
-```
-
-Ein IAC-Bus trägt beide Richtungen gleichzeitig; ein zweiter Bus ist sauberer,
-aber nicht nötig. Solange Slave aktiv ist, werden Clock-Ausgang und MMC-Rück-
-sendungen unterdrückt — es kann keine Rückkopplungsschleife entstehen.
-
-**Clock-Ausgang (Generator als Master).** Sendet MIDI Clock plus Start/Stop.
-Für Hardware gedacht — Drumcomputer, Groovebox, Looper.
-**Cubase kann sich nicht auf eingehende MIDI Clock synchronisieren** (siehe
-Bekannte Grenzen). Setup und Hintergrund: [CUBASE-SETUP.md](CUBASE-SETUP.md).
 
 ### Kanalsperre und MIDI-Monitor
 
@@ -217,17 +233,12 @@ Steht dort *aus*, behält das Instrument in der DAW seinen eigenen Klang.
 ## Bekannte Grenzen
 
 - **Nur Chrome/Edge.** Web MIDI ist in Safari und Firefox nicht implementiert.
-- **Cubase kann nicht auf MIDI Clock slaven.** Als Sync-Quelle akzeptiert Cubase
-  nur MIDI Timecode, ASIO Positioning oder VST System Link — MIDI Clock ist bei
-  Steinberg seit der Umstellung auf die lineare Zeit-Engine reine Ausgabe.
-  Deshalb gibt es den Clock-Slave-Modus: Cubase ist Master, der Generator folgt.
-- **MIDI-Input nur für Clock.** Die Seite wertet ausschließlich die Realtime-Bytes
-  F8/FA/FB/FC und den Songposition-Pointer F2 aus. Noten-Input gibt es nicht.
+- **Kein MIDI-Input.** Die Seite sendet ausschließlich; sie hört nicht zu.
 - **Fünf feste Lanes.** Die Lane-Liste ist ein Array im Code, keine UI zum
   Hinzufügen. Erweitern ist trivial (siehe ARCHITEKTUR.md), aber nicht anklickbar.
 - **Kein Undo für Lane-Einstellungen.** Nur die Progression hat eine Undo-Historie.
-- **`localStorage` ist pro Dateipfad.** Verschiebt man die HTML-Datei, sind
-  Lane-Zustand, Panel-Zustand und DAW-Sync-Einstellungen weg.
+- **`localStorage` ist pro Dateipfad.** Verschiebt man die HTML-Datei, ist der
+  gespeicherte Zustand weg.
 
 ---
 
